@@ -37,6 +37,8 @@ const els = {
   l2SplitVal: document.getElementById("val-l2-split"),
   l2Complexity: document.getElementById("param-l2-complexity"),
   l2ComplexityVal: document.getElementById("val-l2-complexity"),
+  l2Stroke: document.getElementById("param-l2-stroke"),
+  l2StrokeVal: document.getElementById("val-l2-stroke"),
   l2MaxNodes: document.getElementById("val-l2-maxnodes"),
   l2Nodes: document.getElementById("btn-l2-nodes"),
 };
@@ -55,6 +57,7 @@ const state = {
   reactorFontUrl: "",
   reactorFontWeight: "700",
   lab2: {
+    stroke: 0.1, // ~2 px
     attraction: 0.5,
     repulsion: 0.5,
     push: 0.5,
@@ -124,14 +127,19 @@ function seedTextSize(gfx, txt, w, h) {
 
 function drawSeedText(gfx, txt, w, h) {
   const layout = getGrowthLayout(w, h);
+  const tmp = document.createElement("canvas");
+  const ctx = tmp.getContext("2d");
+  const fam = state.mode === "reactor" ? state.reactorFont : "Helvetica Neue";
+  const wt = state.mode === "reactor" ? state.reactorFontWeight : "700";
+  const line = ctx ? seedLineMetrics(ctx, txt, layout, fam, wt) : null;
   gfx.push();
   gfx.fill(0);
   gfx.noStroke();
   gfx.textFont(FONT_STACK);
-  gfx.textAlign(gfx.CENTER, gfx.CENTER);
+  gfx.textAlign(gfx.CENTER, gfx.BASELINE);
   gfx.textStyle(gfx.BOLD);
-  gfx.textSize(seedTextSize(gfx, txt, layout.measureW, layout.measureH));
-  gfx.text(txt, w / 2, layout.textCenterY);
+  gfx.textSize(line ? line.fontSizePx : seedTextSize(gfx, txt, layout.measureW, layout.measureH));
+  gfx.text(txt, w / 2, line ? line.worldBaselineY : layout.textCenterY);
   gfx.pop();
 }
 
@@ -504,7 +512,8 @@ function measureSeedFontSize(ctx, text, w, h, family, weight) {
   if (tw > target) size *= target / tw;
   ctx.font = reactorFontCss(family, size, weight);
   const glyph = measureReactorGlyph(ctx, trimmed, ctx.font);
-  const maxH = h * 0.76;
+  const vPad = Math.max(28, h * 0.1);
+  const maxH = h - vPad * 2;
   if (glyph.height > maxH) size *= maxH / glyph.height;
   return Math.max(22, size);
 }
@@ -585,6 +594,40 @@ function measureReactorGlyph(ctx, text, font) {
     height: ascent + descent,
     centerOffset: (descent - ascent) * 0.5,
   };
+}
+
+// gemeinsame grundlinie für alle zeichen einer zeile
+function seedLineMetrics(ctx, text, layout, family, weight) {
+  const fontSizePx = measureSeedFontSize(
+    ctx, text, layout.measureW, layout.measureH, family, weight
+  );
+  const font = reactorFontCss(family, fontSizePx, weight);
+  ctx.font = font;
+  const glyph = measureReactorGlyph(ctx, text, font);
+  const pad = 16;
+  const localBaselineY = pad + glyph.ascent;
+  const textWidth = glyph.width || (text.length * fontSizePx * 0.6);
+  const cellH = Math.max(32, Math.ceil(glyph.height + pad * 2));
+
+  const lineCanvas = document.createElement("canvas");
+  const lineCtx = lineCanvas.getContext("2d");
+  let worldBaselineY = layout.textCenterY - glyph.centerOffset;
+  if (lineCtx) {
+    lineCanvas.width = Math.max(8, Math.ceil(textWidth + pad * 2));
+    lineCanvas.height = cellH;
+    lineCtx.font = font;
+    lineCtx.textBaseline = "alphabetic";
+    lineCtx.fillStyle = "#fff";
+    lineCtx.fillText(text, pad, localBaselineY);
+    let bin = makeBinaryFromCanvas(lineCtx, lineCanvas.width, cellH);
+    bin = morphCloseBinary(bin, lineCanvas.width, cellH);
+    const ink = bin ? measureInkBounds(bin, lineCanvas.width, cellH) : null;
+    if (ink) {
+      worldBaselineY = layout.textCenterY - (ink.cy - localBaselineY);
+    }
+  }
+
+  return { font, fontSizePx, glyph, pad, localBaselineY, worldBaselineY, textWidth, cellH };
 }
 
 function traceContoursMoore(bin, w, h, mapToWorld) {
@@ -677,12 +720,37 @@ function getGrowthLayout(w, h) {
   };
 }
 
+function measureInkBounds(bin, bw, bh) {
+  let minX = bw;
+  let minY = bh;
+  let maxX = -1;
+  let maxY = -1;
+  for (let y = 0; y < bh; y++) {
+    for (let x = 0; x < bw; x++) {
+      if (!bin[y * bw + x]) continue;
+      if (x < minX) minX = x;
+      if (y < minY) minY = y;
+      if (x > maxX) maxX = x;
+      if (y > maxY) maxY = y;
+    }
+  }
+  if (maxX < minX) return null;
+  return {
+    minX,
+    minY,
+    maxX,
+    maxY,
+    cx: (minX + maxX) * 0.5,
+    cy: (minY + maxY) * 0.5,
+  };
+}
+
 function seedTextWorldMap(w, h, textWidth, glyph, margin, canvasCenterY, centerY) {
   const startX = (w - textWidth) * 0.5;
   const startY = centerY != null ? centerY : h * 0.5;
   return (px, py) => ({
     x: startX + (px - margin),
-    y: startY - glyph.centerOffset + (py - canvasCenterY),
+    y: startY + (py - canvasCenterY),
   });
 }
 
@@ -828,6 +896,60 @@ function lab2OuterContoursOnly(ptsList) {
   return kept;
 }
 
+function distPointToSegment(px, py, ax, ay, bx, by) {
+  const dx = bx - ax;
+  const dy = by - ay;
+  const len2 = dx * dx + dy * dy;
+  if (len2 === 0) return Math.hypot(px - ax, py - ay);
+  let t = ((px - ax) * dx + (py - ay) * dy) / len2;
+  t = clamp(t, 0, 1);
+  return Math.hypot(px - (ax + t * dx), py - (ay + t * dy));
+}
+
+function distPointToContour(px, py, pts) {
+  let minD = Infinity;
+  for (let i = 0; i < pts.length; i++) {
+    const a = pts[i];
+    const b = pts[(i + 1) % pts.length];
+    const d = distPointToSegment(px, py, a.x, a.y, b.x, b.y);
+    if (d < minD) minD = d;
+  }
+  return minD;
+}
+
+// hauptkontur + nur klar getrennte teile (i-tüpfel), keine innen-kante bei c/h
+function lab2PickCharContours(outers, fontSizePx) {
+  const minArea = (fontSizePx * 0.06) ** 2;
+  const items = outers
+    .map((pts) => ({
+      pts,
+      area: Math.abs(contourSignedArea(pts)),
+      cent: contourCentroid(pts),
+    }))
+    .filter((it) => it.area >= minArea)
+    .sort((a, b) => b.area - a.area);
+  if (!items.length) return [];
+  if (items.length === 1) return [items[0].pts];
+
+  const main = items[0];
+  const kept = [main.pts];
+  const sepDist = Math.max(8, fontSizePx * 0.14);
+
+  for (let i = 1; i < items.length; i++) {
+    const c = items[i];
+    if (pointInPolygon(c.cent.x, c.cent.y, main.pts)) continue;
+    if (distPointToContour(c.cent.x, c.cent.y, main.pts) < sepDist) continue;
+    const mb = contourBBoxMetrics(main.pts);
+    const cb = contourBBoxMetrics(c.pts);
+    const overlapW = Math.max(0, Math.min(mb.maxX, cb.maxX) - Math.max(mb.minX, cb.minX));
+    const overlapH = Math.max(0, Math.min(mb.maxY, cb.maxY) - Math.max(mb.minY, cb.minY));
+    const overlap = overlapW * overlapH;
+    if (c.area < main.area * 0.55 && overlap > cb.bw * cb.bh * 0.35) continue;
+    kept.push(c.pts);
+  }
+  return kept;
+}
+
 function sanitizeReactorContours(contours, w, h) {
   if (!contours || !contours.length) return [];
   const maxW = w * GROWTH_MAX_BBOX_FRAC;
@@ -944,37 +1066,31 @@ function generateReactorTextContours(text, w, h, family, weight, maxEdge) {
   if (!ctx || !text.length) return [];
 
   const layout = getGrowthLayout(w, h);
-  const fontSizePx = measureSeedFontSize(
-    ctx, text, layout.measureW, layout.measureH, family, weight
-  );
-  const font = reactorFontCss(family, fontSizePx, weight);
+  const line = seedLineMetrics(ctx, text, layout, family, weight);
+  const textWidth = line.glyph.width || (text.length * line.fontSizePx * 0.6);
 
-  ctx.font = font;
-  const glyph = measureReactorGlyph(ctx, text, font);
-  const textWidth = glyph.width || (text.length * fontSizePx * 0.6);
-
-  const margin = 32;
+  const margin = line.pad;
   const logicalW = Math.max(2, Math.ceil(textWidth + margin * 2));
-  const logicalH = Math.max(2, Math.ceil(glyph.height + margin * 2));
+  const logicalH = Math.max(2, Math.ceil(line.glyph.height + margin * 2));
   tmp.width = logicalW;
   tmp.height = logicalH;
 
   ctx.clearRect(0, 0, logicalW, logicalH);
-  ctx.font = font;
+  ctx.font = line.font;
   ctx.textBaseline = "alphabetic";
   ctx.fillStyle = "#fff";
-  const baselineY = margin + glyph.ascent;
-  ctx.fillText(text, margin, baselineY);
+  ctx.fillText(text, margin, line.localBaselineY);
 
-  const canvasCenterY = margin + glyph.height * 0.5;
   let bin = makeBinaryFromCanvas(ctx, logicalW, logicalH);
   bin = morphCloseBinary(bin, logicalW, logicalH);
   bin = morphCloseBinary(bin, logicalW, logicalH);
   if (!bin) return [];
 
-  const mapToWorld = seedTextWorldMap(
-    w, h, textWidth, glyph, margin, canvasCenterY, layout.textCenterY
-  );
+  const startX = (w - textWidth) * 0.5;
+  const mapToWorld = (px, py) => ({
+    x: startX + (px - margin),
+    y: line.worldBaselineY + (py - line.localBaselineY),
+  });
 
   const raw = traceContoursMoore(bin, logicalW, logicalH, mapToWorld);
   const ptsList = [];
@@ -997,7 +1113,7 @@ function generateReactorTextContours(text, w, h, family, weight, maxEdge) {
   return classifyContoursAsHoles(ptsList);
 }
 
-// lab2: pro zeichen genau eine geschlossene außen-kontur (fill + trace, kein stroke-doppel)
+// lab2: pro zeichen alle äußeren konturen (z. b. i-tüpfel + stamm, ö-punkte)
 function generateLab2TextContours(text, w, h, family, weight, maxEdge) {
   const charCanvas = document.createElement("canvas");
   const charCtx = charCanvas.getContext("2d");
@@ -1006,19 +1122,12 @@ function generateLab2TextContours(text, w, h, family, weight, maxEdge) {
   if (!charCtx || !measureCtx || !text.length) return [];
 
   const layout = getGrowthLayout(w, h);
-  const fontSizePx = measureSeedFontSize(
-    measureCtx, text, layout.measureW, layout.measureH, family, weight
-  );
-  const font = reactorFontCss(family, fontSizePx, weight);
-
-  measureCtx.font = font;
-  const glyph = measureReactorGlyph(measureCtx, text, font);
-  const textWidth = glyph.width || (text.length * fontSizePx * 0.6);
-  const logicalH = Math.max(2, Math.ceil(glyph.height + 32));
-  const canvasCenterY = 16 + glyph.height * 0.5;
-  const baselineY = 16 + glyph.ascent;
+  const line = seedLineMetrics(measureCtx, text, layout, family, weight);
+  const textWidth = line.textWidth;
+  const cellH = line.cellH;
   const startX = (w - textWidth) * 0.5;
-  const startY = layout.textCenterY;
+
+  measureCtx.font = line.font;
 
   const contours = [];
   let penX = 0;
@@ -1027,54 +1136,42 @@ function generateLab2TextContours(text, w, h, family, weight, maxEdge) {
     const ch = text[i];
     const chW = measureCtx.measureText(ch).width;
     if (ch === " " || ch === "\n" || ch === "\t") {
-      penX += chW || fontSizePx * 0.28;
+      penX += chW || line.fontSizePx * 0.28;
       continue;
     }
 
-    const pad = 14;
-    const cw = Math.max(8, Math.ceil(chW + pad * 2));
+    const cw = Math.max(12, Math.ceil(chW + line.pad * 2));
     charCanvas.width = cw;
-    charCanvas.height = logicalH;
-    charCtx.clearRect(0, 0, cw, logicalH);
-    charCtx.font = font;
+    charCanvas.height = cellH;
+    charCtx.clearRect(0, 0, cw, cellH);
+    charCtx.font = line.font;
     charCtx.textBaseline = "alphabetic";
+    charCtx.textAlign = "left";
     charCtx.fillStyle = "#fff";
-    charCtx.fillText(ch, pad, baselineY);
+    charCtx.fillText(ch, line.pad, line.localBaselineY);
 
-    let bin = makeBinaryFromCanvas(charCtx, cw, logicalH);
-    bin = morphCloseBinary(bin, cw, logicalH);
-    bin = morphCloseBinary(bin, cw, logicalH);
+    let bin = makeBinaryFromCanvas(charCtx, cw, cellH);
+    bin = morphCloseBinary(bin, cw, cellH);
+    bin = morphCloseBinary(bin, cw, cellH);
     if (!bin) {
       penX += chW;
       continue;
     }
 
-    const worldOffsetX = startX + penX;
     const mapToWorld = (px, py) => ({
-      x: worldOffsetX + (px - pad),
-      y: startY - glyph.centerOffset + (py - canvasCenterY),
-    }); // startX/startY = leinwand-mitte
+      x: startX + penX + (px - line.pad),
+      y: line.worldBaselineY + (py - line.localBaselineY),
+    });
 
-    const raw = traceContoursMoore(bin, cw, logicalH, mapToWorld);
+    const raw = traceContoursMoore(bin, cw, cellH, mapToWorld);
     const ptsList = [];
     for (let r = 0; r < raw.length; r++) {
       const final = processReactorContour(raw[r], maxEdge);
       if (final) ptsList.push(final);
     }
 
-    const outers = lab2OuterContoursOnly(ptsList);
-    if (outers.length) {
-      let best = outers[0];
-      let bestArea = Math.abs(contourSignedArea(best));
-      for (let o = 1; o < outers.length; o++) {
-        const area = Math.abs(contourSignedArea(outers[o]));
-        if (area > bestArea) {
-          best = outers[o];
-          bestArea = area;
-        }
-      }
-      contours.push(best);
-    }
+    const picked = lab2PickCharContours(lab2OuterContoursOnly(ptsList), line.fontSizePx);
+    for (let o = 0; o < picked.length; o++) contours.push(picked[o]);
 
     penX += chW;
   }
@@ -1627,6 +1724,7 @@ const FACTORIES = {
 
 async function rebuildSim() {
   if (!p5i) return;
+  if (state.input === "text") updateInputFontSize();
   refreshLab2MaxNodesLabel();
   refreshSeed(p5i);
   if (state.mode === "reactor" && state.reactorFontUrl.trim()) {
@@ -2077,6 +2175,7 @@ const lab2SplitFmt = (v) => {
   return `${Math.round(prm.insertDistance)} px`;
 };
 
+bindLab2Param(els.l2Stroke, els.l2StrokeVal, "stroke", lab2StrokeFmt, false);
 bindLab2Param(els.l2Attraction, els.l2AttractionVal, "attraction", pct, false);
 bindLab2Param(els.l2Repulsion, els.l2RepulsionVal, "repulsion", pct, false);
 bindLab2Param(els.l2Push, els.l2PushVal, "push", pct, false);

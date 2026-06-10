@@ -4,10 +4,10 @@
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>weird growth — generative typografie</title>
-  <link rel="icon" href="favicon-32.png" sizes="32x32" type="image/png">
-  <link rel="icon" href="favicon.png" type="image/png">
-  <link rel="apple-touch-icon" href="apple-touch-icon.png">
-  <link rel="stylesheet" href="css/style.css?v=18">
+  <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
+  <link rel="icon" href="favicon.png?v=2" type="image/png">
+  <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
+  <link rel="stylesheet" href="css/style.css?v=19">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text mode-lab mode-lab2" data-mode="lab2" tabindex="-1">
@@ -122,8 +122,8 @@
     </section>
 
     <section class="panel-block draw-tools">
-      <h2 class="panel-label">pinsel</h2>
-      <label class="control" for="param-brush">
+      <h2 class="panel-label draw-brush-label">pinsel</h2>
+      <label class="control draw-brush-control" for="param-brush">
         <span class="control-head">
           dicke
           <output id="val-brush" class="control-val">24</output>
@@ -169,6 +169,13 @@
 
     <section class="panel-block lab2-tools">
       <h2 class="panel-label">differential growth</h2>
+      <label class="control" for="param-l2-stroke">
+        <span class="control-head">
+          liniendicke
+          <output id="val-l2-stroke" class="control-val">2 px</output>
+        </span>
+        <input type="range" id="param-l2-stroke" min="0" max="1" step="0.01" value="0.1">
+      </label>
       <label class="control" for="param-l2-attraction">
         <span class="control-head">
           anziehung
@@ -220,8 +227,8 @@
 
   <script src="js/lib/glass-core.js?v=1"></script>
   <script src="js/lab-growth.js?v=7"></script>
-  <script src="js/lab2-growth.js?v=10"></script>
+  <script src="js/lab2-growth.js?v=11"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=62"></script>
+  <script src="js/app.js?v=70"></script>
 </body>
 </html>

@@ -33,6 +33,12 @@ function lab2InsertDistance(split, seedSpacing) {
   return lab2Clamp(seedSpacing * (1.15 - split * 0.55), 2, 16);
 }
 
+function lab2StrokeWidth(stroke) {
+  return lab2Clamp(0.5 + (stroke ?? 0.1) * 15, 0.5, 16);
+}
+
+const lab2StrokeFmt = (v) => `${Math.round(lab2StrokeWidth(v) * 10) / 10} px`;
+
 function lab2ComputeParams(l2, w, h) {
   const complexity = l2.complexity ?? 0.11;
   const split = l2.split ?? 0.31;
@@ -398,7 +404,7 @@ const Lab2GrowthMode = {
 
       draw() {
         p.background(255);
-        drawLab2(p, lines, state.lab2.showNodes);
+        drawLab2(p, lines, state.lab2.showNodes, lab2StrokeWidth(state.lab2.stroke));
       },
 
       appendContours(contours) {
@@ -414,15 +420,15 @@ const Lab2GrowthMode = {
       },
 
       get strokeW() {
-        return 2;
+        return lab2StrokeWidth(state.lab2.stroke);
       },
     };
   },
 };
 
-function drawLab2(p, lines, showNodes) {
+function drawLab2(p, lines, showNodes, strokeW) {
   p.stroke(15);
-  p.strokeWeight(2);
+  p.strokeWeight(strokeW ?? 2);
   p.noFill();
   p.strokeCap(p.ROUND);
   p.strokeJoin(p.ROUND);

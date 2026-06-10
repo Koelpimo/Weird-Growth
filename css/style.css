@@ -306,6 +306,12 @@ body.is-draw .draw-tools {
   display: block;
 }
 
+/* differential growth: nur zeichnung leeren, keine pinsel-dicke */
+body.mode-lab2 .draw-brush-label,
+body.mode-lab2 .draw-brush-control {
+  display: none;
+}
+
 .reactor-tools {
   display: none;
 }
