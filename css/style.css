@@ -1,0 +1,462 @@
+:root {
+  --bg: #ffffff;
+  --fg: #0a0a0a;
+  --muted: rgba(10, 10, 10, 0.45);
+  --line: rgba(0, 0, 0, 0.12);
+  --panel-w: 15.5rem;
+  --top-h: 3.25rem;
+  --font: "SF Mono", "Menlo", "Consolas", "Liberation Mono", monospace;
+  --seed-font: "Helvetica Neue", Helvetica, Arial, sans-serif;
+
+  /* liquid glass (wie das drop-up bei inkdrops) */
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-border: rgba(0, 0, 0, 0.1);
+  --glass-blur: blur(20px) saturate(1.15);
+  --glass-shadow: 0 8px 32px rgba(0, 0, 0, 0.1), inset 0 1px 0 rgba(255, 255, 255, 0.65);
+  --glass-radius: 22px;
+  --glass-ease: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  min-height: 100%;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font);
+  overflow: hidden;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+/* —— topbar: text / draw — schwebende glass-pille —— */
+
+.topbar {
+  position: fixed;
+  top: 1rem;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.input-modes {
+  position: relative;
+  display: flex;
+  gap: 0.15rem;
+  padding: 0.3rem;
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  /* css-fallback — wird vom webgl-glass überdeckt, wenn verfügbar */
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+}
+
+/* webgl-glass — identisch für topbar + side-panel */
+.ui-glass-canvas {
+  position: absolute;
+  inset: 0;
+  z-index: 1;
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+  pointer-events: none;
+}
+
+.mode-tab {
+  position: relative;
+  z-index: 2;
+  padding: 0.42rem 1.1rem;
+  border: none;
+  border-radius: 999px;
+  background: transparent;
+  color: var(--muted);
+  font-size: 0.72rem;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+  cursor: pointer;
+  transition: color 0.2s var(--glass-ease), background 0.2s var(--glass-ease);
+}
+
+.mode-tab:hover {
+  color: var(--fg);
+}
+
+.mode-tab.is-active {
+  background: var(--fg);
+  color: var(--bg);
+}
+
+/* —— leinwand —— */
+
+.stage {
+  position: fixed;
+  inset: 0;
+  z-index: 5;
+  background: var(--bg);
+}
+
+.stage canvas {
+  display: block;
+  width: 100% !important;
+  height: 100% !important;
+}
+
+body.is-text .stage canvas {
+  cursor: text;
+}
+
+body.is-draw .stage canvas {
+  cursor: crosshair;
+}
+
+/* —— texteingabe in der mitte —— */
+
+.text-layer {
+  position: fixed;
+  inset: 0;
+  z-index: 10;
+  display: none;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  pointer-events: none;
+}
+
+body.is-text .text-layer {
+  display: flex;
+}
+
+/* unsichtbarer spiegel — gleiche schrift-metrik wie das eingabefeld */
+.seed-sizer {
+  position: absolute;
+  left: 50%;
+  top: 50%;
+  transform: translate(-50%, -50%);
+  visibility: hidden;
+  white-space: pre;
+  font-size: 88px;
+  font-weight: 700;
+  font-family: var(--seed-font);
+  line-height: 1.2;
+  letter-spacing: 0;
+  pointer-events: none;
+}
+
+.seed-input {
+  min-width: 1ch;
+  max-width: 95%;
+  margin: 0;
+  padding: 0;
+  border: none;
+  background: transparent;
+  color: transparent; /* der text wird allein durch den wuchs auf der leinwand gezeichnet */
+  font-size: 88px; /* dynamisch via JS — exakt wie die seed-größe */
+  font-weight: 700;
+  font-family: var(--seed-font);
+  line-height: 1.2;
+  letter-spacing: 0;
+  text-align: center;
+  outline: none;
+  pointer-events: auto;
+  caret-color: var(--fg);
+}
+
+.seed-input::selection {
+  background: transparent;
+  color: transparent;
+}
+
+.seed-input::placeholder {
+  color: transparent;
+}
+
+/* —— rechtes panel — schwebendes liquid-glass —— */
+
+.side-panel {
+  position: fixed;
+  top: 1rem;
+  right: 1rem;
+  bottom: 1rem;
+  z-index: 40;
+  width: var(--panel-w);
+  overflow: hidden;
+  border: 1px solid var(--glass-border);
+  border-radius: var(--glass-radius);
+  /* css-fallback — wird vom webgl-glass überdeckt, wenn verfügbar */
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  box-shadow: var(--glass-shadow);
+}
+
+.panel-content {
+  position: relative;
+  z-index: 2;
+  height: 100%;
+  padding: 1.1rem 1rem;
+  overflow-y: auto;
+}
+
+.panel-block {
+  margin-bottom: 1.4rem;
+  padding-bottom: 1.1rem;
+  border-bottom: 1px solid var(--line);
+}
+
+.panel-block:last-child {
+  border-bottom: none;
+}
+
+.panel-label {
+  margin: 0 0 0.75rem;
+  font-size: 0.62rem;
+  font-weight: 500;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+
+.growth-modes {
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+}
+
+.growth-mode {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.55rem 0.7rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--muted);
+  font-size: 0.72rem;
+  text-align: left;
+  cursor: pointer;
+  transition: color 0.2s var(--glass-ease), border-color 0.2s var(--glass-ease),
+    background 0.2s var(--glass-ease), box-shadow 0.2s var(--glass-ease);
+}
+
+.growth-mode:hover:not(:disabled) {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.75);
+}
+
+.growth-mode.is-active {
+  color: var(--fg);
+  background: rgba(255, 255, 255, 0.85);
+  border-color: rgba(0, 0, 0, 0.25);
+  box-shadow: 0 2px 10px rgba(0, 0, 0, 0.07), inset 0 1px 0 rgba(255, 255, 255, 0.8);
+}
+
+.growth-mode.is-soon {
+  opacity: 0.38;
+  cursor: not-allowed;
+}
+
+.growth-mode-name {
+  text-transform: lowercase;
+}
+
+.growth-mode[data-mode="lab2"] .growth-mode-name,
+.growth-mode[data-mode="adern"] .growth-mode-name {
+  text-transform: none;
+  font-size: 0.58rem;
+  line-height: 1.15;
+}
+
+.growth-mode-tag {
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  color: var(--muted);
+}
+
+.mode-desc {
+  margin: 0.55rem 0 0;
+  font-size: 0.62rem;
+  line-height: 1.55;
+  color: var(--muted);
+}
+
+/* —— pinsel nur im draw-modus —— */
+
+.draw-tools {
+  display: none;
+}
+
+body.is-draw .draw-tools {
+  display: block;
+}
+
+.reactor-tools {
+  display: none;
+}
+
+body.mode-reactor .reactor-tools {
+  display: block;
+}
+
+/* —— lab2 differential-growth-parameter nur im lab2-modus —— */
+
+.lab2-tools {
+  display: none;
+}
+
+body.mode-lab2 .lab2-tools {
+  display: block;
+}
+
+/* klassische parameter (liniendicke/abstand/teilung) in lab2 ausblenden,
+   tempo bleibt sichtbar */
+body.mode-lab2 .classic-params {
+  display: none;
+}
+
+.lab2-max-hint {
+  margin: 0.15rem 0 0.5rem;
+  font-size: 0.58rem;
+  letter-spacing: 0.04em;
+  text-transform: lowercase;
+  opacity: 0.55;
+}
+
+#btn-l2-nodes {
+  margin-top: 0.6rem;
+}
+
+.panel-input {
+  width: 100%;
+  padding: 0.45rem 0.55rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.55);
+  color: var(--fg);
+  font: inherit;
+  font-size: 0.68rem;
+}
+
+.panel-input:focus {
+  outline: none;
+  border-color: rgba(0, 0, 0, 0.25);
+  background: rgba(255, 255, 255, 0.85);
+}
+
+.reactor-font-hint {
+  margin-top: 0.35rem;
+}
+
+/* —— regler —— */
+
+.control {
+  display: block;
+  margin-bottom: 0.85rem;
+}
+
+.control-head {
+  display: flex;
+  justify-content: space-between;
+  gap: 0.5rem;
+  margin-bottom: 0.38rem;
+  font-size: 0.68rem;
+  text-transform: lowercase;
+  color: var(--muted);
+}
+
+.control-val {
+  font-variant-numeric: tabular-nums;
+  color: var(--fg);
+}
+
+input[type="range"] {
+  width: 100%;
+  height: 3px;
+  margin: 0;
+  appearance: none;
+  background: rgba(0, 0, 0, 0.12);
+  border-radius: 2px;
+  cursor: pointer;
+}
+
+input[type="range"]::-webkit-slider-thumb {
+  appearance: none;
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fg);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+input[type="range"]::-moz-range-thumb {
+  width: 12px;
+  height: 12px;
+  border: 2px solid var(--fg);
+  border-radius: 50%;
+  background: var(--bg);
+}
+
+/* —— buttons —— */
+
+.panel-btn {
+  width: 100%;
+  padding: 0.5rem 0.7rem;
+  border: 1px solid rgba(0, 0, 0, 0.08);
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.45);
+  color: var(--fg);
+  font-size: 0.68rem;
+  text-transform: lowercase;
+  cursor: pointer;
+  transition: background 0.2s var(--glass-ease), border-color 0.2s var(--glass-ease);
+}
+
+.panel-btn:hover {
+  background: rgba(255, 255, 255, 0.8);
+  border-color: rgba(0, 0, 0, 0.2);
+}
+
+.panel-btn + .panel-btn {
+  margin-top: 0.4rem;
+}
+
+/* —— mobil: panel wird zum drop-up-sheet —— */
+
+@media (max-width: 760px) {
+  /* leinwand volle höhe — wachstum bis zum bildschirmrand (auch unter dem sheet) */
+  .text-layer {
+    bottom: var(--sheet-h, 40vh);
+  }
+
+  .side-panel {
+    top: auto;
+    left: 0.5rem;
+    right: 0.5rem;
+    bottom: 0;
+    width: auto;
+    height: min(46vh, max(36vh, 17.5rem));
+    max-height: calc(100vh - 5rem);
+    border-bottom: none;
+    border-radius: var(--glass-radius) var(--glass-radius) 0 0;
+  }
+
+  .panel-content {
+    padding-bottom: max(1.1rem, env(safe-area-inset-bottom));
+  }
+}

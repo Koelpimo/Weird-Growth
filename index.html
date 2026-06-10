@@ -1,0 +1,224 @@
+<!DOCTYPE html>
+<html lang="de">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <title>weird growth — generative typografie</title>
+  <link rel="stylesheet" href="css/style.css?v=18">
+  <script src="js/lib/p5.min.js"></script>
+</head>
+<body class="is-text mode-lab mode-lab2" data-mode="lab2" tabindex="-1">
+
+  <!-- oben: eingabe-modi -->
+  <header class="topbar">
+    <nav class="input-modes" aria-label="Eingabe">
+      <canvas id="topbar-glass-canvas" class="ui-glass-canvas" aria-hidden="true"></canvas>
+      <button type="button" class="mode-tab is-active" data-input="text">text</button>
+      <button type="button" class="mode-tab" data-input="draw">draw</button>
+    </nav>
+  </header>
+
+  <!-- mitte: leinwand -->
+  <main class="stage" aria-label="Leinwand">
+    <div id="canvas-host"></div>
+  </main>
+
+  <!-- großes texteingabefeld (typereactor-stil) -->
+  <div class="text-layer" id="text-layer">
+    <span class="seed-sizer" id="seed-sizer" aria-hidden="true">TYPE HERE</span>
+    <input
+      type="text"
+      id="seed-text"
+      class="seed-input"
+      value="TYPE HERE"
+      placeholder="TYPE HERE"
+      maxlength="20"
+      autocomplete="off"
+      spellcheck="false"
+      aria-label="Text eingeben"
+    >
+  </div>
+
+  <!-- rechts: generative modi + parameter -->
+  <aside class="side-panel" aria-label="Generative Modi">
+    <canvas id="panel-glass-canvas" class="ui-glass-canvas" aria-hidden="true"></canvas>
+    <div class="panel-content">
+    <section class="panel-block">
+      <h2 class="panel-label">Growth Modes</h2>
+      <div class="growth-modes" role="group" aria-label="Wuchs-Art">
+        <button type="button" class="growth-mode is-active" data-mode="lab2">
+          <span class="growth-mode-name">Differential Growth</span>
+          <span class="growth-mode-tag">unequal expansion</span>
+        </button>
+        <button type="button" class="growth-mode" data-mode="lab">
+          <span class="growth-mode-name">lab</span>
+          <span class="growth-mode-tag">experiment</span>
+        </button>
+        <button type="button" class="growth-mode" data-mode="adern">
+          <span class="growth-mode-name">differential growth old</span>
+          <span class="growth-mode-tag">unequal expansion</span>
+        </button>
+        <button type="button" class="growth-mode" data-mode="reactor">
+          <span class="growth-mode-name">Reactor</span>
+          <span class="growth-mode-tag">weird lines</span>
+        </button>
+        <button type="button" class="growth-mode is-soon" data-mode="partikel" disabled>
+          <span class="growth-mode-name">partikel</span>
+          <span class="growth-mode-tag">strömung</span>
+        </button>
+        <button type="button" class="growth-mode is-soon" data-mode="bloom" disabled>
+          <span class="growth-mode-name">bloom</span>
+          <span class="growth-mode-tag">konturen</span>
+        </button>
+      </div>
+      <p class="mode-desc" id="mode-desc">
+        Differential line growth (Patt Vira) — knoten an schrift-outline / gezeichneter linie,
+        separation + cohesion, wachstum durch insert.
+      </p>
+    </section>
+
+    <section class="panel-block reactor-tools">
+      <h2 class="panel-label">font</h2>
+      <label class="control" for="param-reactor-font">
+        <span class="control-head">schrift</span>
+        <input
+          type="text"
+          id="param-reactor-font"
+          class="panel-input"
+          value="Helvetica Neue"
+          list="reactor-font-presets"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="Schriftfamilie"
+        >
+      </label>
+      <datalist id="reactor-font-presets">
+        <option value="Helvetica Neue"></option>
+        <option value="Helvetica"></option>
+        <option value="Arial"></option>
+        <option value="Georgia"></option>
+        <option value="Times New Roman"></option>
+        <option value="Courier New"></option>
+        <option value="Impact"></option>
+      </datalist>
+      <label class="control" for="param-reactor-font-url">
+        <span class="control-head">font-datei</span>
+        <input
+          type="text"
+          id="param-reactor-font-url"
+          class="panel-input"
+          placeholder="fonts/name.woff2"
+          spellcheck="false"
+          autocomplete="off"
+          aria-label="Pfad zur Font-Datei"
+        >
+      </label>
+      <p class="mode-desc reactor-font-hint">
+        System-Schrift oder eigene Datei per Pfad — wird per FontFace geladen (wie bei typereactor, ohne Drag &amp; Drop).
+      </p>
+    </section>
+
+    <section class="panel-block draw-tools">
+      <h2 class="panel-label">pinsel</h2>
+      <label class="control" for="param-brush">
+        <span class="control-head">
+          dicke
+          <output id="val-brush" class="control-val">24</output>
+        </span>
+        <input type="range" id="param-brush" min="6" max="72" step="2" value="24">
+      </label>
+      <button type="button" id="btn-clear" class="panel-btn">zeichnung leeren</button>
+    </section>
+
+    <section class="panel-block">
+      <h2 class="panel-label">parameter</h2>
+      <label class="control" for="param-speed">
+        <span class="control-head">
+          tempo
+          <output id="val-speed" class="control-val">1.5×</output>
+        </span>
+        <input type="range" id="param-speed" min="0.2" max="5" step="0.1" value="1.5">
+      </label>
+      <div class="classic-params">
+        <label class="control" for="param-a">
+          <span class="control-head">
+            liniendicke
+            <output id="val-a" class="control-val">13 px</output>
+          </span>
+          <input type="range" id="param-a" min="0" max="1" step="0.01" value="0.5">
+        </label>
+        <label class="control" for="param-b">
+          <span class="control-head">
+            abstand
+            <output id="val-b" class="control-val">32 px</output>
+          </span>
+          <input type="range" id="param-b" min="0" max="1" step="0.01" value="0.5">
+        </label>
+        <label class="control" for="param-c">
+          <span class="control-head">
+            teilung
+            <output id="val-c" class="control-val">14 px</output>
+          </span>
+          <input type="range" id="param-c" min="0" max="1" step="0.01" value="0.5">
+        </label>
+      </div>
+    </section>
+
+    <section class="panel-block lab2-tools">
+      <h2 class="panel-label">differential growth</h2>
+      <label class="control" for="param-l2-attraction">
+        <span class="control-head">
+          anziehung
+          <output id="val-l2-attraction" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-l2-attraction" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-l2-repulsion">
+        <span class="control-head">
+          abstoßung
+          <output id="val-l2-repulsion" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-l2-repulsion" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-l2-push">
+        <span class="control-head">
+          schub (form)
+          <output id="val-l2-push" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-l2-push" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-l2-complexity">
+        <span class="control-head">
+          komplexität
+          <output id="val-l2-complexity" class="control-val">~20</output>
+        </span>
+        <input type="range" id="param-l2-complexity" min="0" max="1" step="0.01" value="0.11">
+      </label>
+      <p class="lab2-max-hint">node-limit: <output id="val-l2-maxnodes">4000</output></p>
+      <label class="control" for="param-l2-split">
+        <span class="control-head">
+          neue node
+          <output id="val-l2-split" class="control-val">16 px</output>
+        </span>
+        <input type="range" id="param-l2-split" min="0" max="1" step="0.01" value="0.31">
+      </label>
+      <button type="button" id="btn-l2-nodes" class="panel-btn">nodes: aus</button>
+    </section>
+
+    <section class="panel-block panel-actions">
+      <h2 class="panel-label">aktionen</h2>
+      <button type="button" id="btn-play" class="panel-btn">pause</button>
+      <button type="button" id="btn-reset" class="panel-btn">neu wachsen</button>
+      <button type="button" id="btn-svg" class="panel-btn">&darr; svg</button>
+      <button type="button" id="btn-save" class="panel-btn">&darr; png</button>
+    </section>
+    </div>
+  </aside>
+
+  <script src="js/lib/glass-core.js?v=1"></script>
+  <script src="js/lab-growth.js?v=7"></script>
+  <script src="js/lab2-growth.js?v=10"></script>
+  <script src="js/reactor-growth.js?v=6"></script>
+  <script src="js/app.js?v=62"></script>
+</body>
+</html>
