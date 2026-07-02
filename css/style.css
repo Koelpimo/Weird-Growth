@@ -173,7 +173,7 @@ body.is-text .text-layer {
   text-align: center;
   outline: none;
   pointer-events: auto;
-  caret-color: var(--fg);
+  caret-color: transparent;
 }
 
 .seed-input::selection {
@@ -276,8 +276,7 @@ body.is-text .text-layer {
   text-transform: lowercase;
 }
 
-.growth-mode[data-mode="lab2"] .growth-mode-name,
-.growth-mode[data-mode="adern"] .growth-mode-name {
+.growth-mode[data-mode="lab2"] .growth-mode-name {
   text-transform: none;
   font-size: 0.58rem;
   line-height: 1.15;
@@ -308,7 +307,9 @@ body.is-draw .draw-tools {
 
 /* differential growth: nur zeichnung leeren, keine pinsel-dicke */
 body.mode-lab2 .draw-brush-label,
-body.mode-lab2 .draw-brush-control {
+body.mode-lab2 .draw-brush-control,
+body.mode-diff3d .draw-brush-label,
+body.mode-diff3d .draw-brush-control {
   display: none;
 }
 
@@ -336,6 +337,61 @@ body.mode-lab2 .classic-params {
   display: none;
 }
 
+.diff3d-tools {
+  display: none;
+}
+
+body.mode-diff3d .diff3d-tools {
+  display: block;
+}
+
+body.mode-diff3d .classic-params {
+  display: none;
+}
+
+body.mode-diff3d .text-layer {
+  display: none;
+}
+
+body.mode-diff3d.is-text .text-layer {
+  display: none;
+}
+
+/* —— depth of field web —— */
+.dof-tools {
+  display: none;
+}
+
+body.mode-dof .dof-tools {
+  display: block;
+}
+
+body.mode-dof .classic-params {
+  display: none;
+}
+
+body.mode-dof .text-layer {
+  display: none;
+}
+
+body.mode-dof .draw-brush-label,
+body.mode-dof .draw-brush-control {
+  display: none;
+}
+
+/* lab: eigener teilungs-abstand, klassische „teilung“ ausblenden */
+.lab-tools {
+  display: none;
+}
+
+body[data-mode="lab"] .lab-tools {
+  display: block;
+}
+
+body[data-mode="lab"] .classic-param-c {
+  display: none;
+}
+
 .lab2-max-hint {
   margin: 0.15rem 0 0.5rem;
   font-size: 0.58rem;
@@ -344,7 +400,8 @@ body.mode-lab2 .classic-params {
   opacity: 0.55;
 }
 
-#btn-l2-nodes {
+#btn-l2-nodes,
+#btn-d3-nodes {
   margin-top: 0.6rem;
 }
 
@@ -436,6 +493,12 @@ input[type="range"]::-moz-range-thumb {
 .panel-btn:hover {
   background: rgba(255, 255, 255, 0.8);
   border-color: rgba(0, 0, 0, 0.2);
+}
+
+.panel-btn.is-active {
+  background: var(--fg, #111);
+  color: #fff;
+  border-color: var(--fg, #111);
 }
 
 .panel-btn + .panel-btn {

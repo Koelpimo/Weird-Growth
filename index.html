@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=20">
+  <link rel="stylesheet" href="css/style.css?v=29">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text mode-lab mode-lab2" data-mode="lab2" tabindex="-1">
@@ -49,6 +49,14 @@
     <section class="panel-block">
       <h2 class="panel-label">Growth Modes</h2>
       <div class="growth-modes" role="group" aria-label="Wuchs-Art">
+        <button type="button" class="growth-mode" data-mode="diff3d">
+          <span class="growth-mode-name">3D Growth</span>
+          <span class="growth-mode-tag">depth of field</span>
+        </button>
+        <button type="button" class="growth-mode" data-mode="dof">
+          <span class="growth-mode-name">3D Web</span>
+          <span class="growth-mode-tag">sphere growth</span>
+        </button>
         <button type="button" class="growth-mode is-active" data-mode="lab2">
           <span class="growth-mode-name">Differential Growth</span>
           <span class="growth-mode-tag">unequal expansion</span>
@@ -56,10 +64,6 @@
         <button type="button" class="growth-mode" data-mode="lab">
           <span class="growth-mode-name">lab</span>
           <span class="growth-mode-tag">experiment</span>
-        </button>
-        <button type="button" class="growth-mode" data-mode="adern">
-          <span class="growth-mode-name">differential growth old</span>
-          <span class="growth-mode-tag">unequal expansion</span>
         </button>
         <button type="button" class="growth-mode" data-mode="reactor">
           <span class="growth-mode-name">Reactor</span>
@@ -149,7 +153,7 @@
           </span>
           <input type="range" id="param-b" min="0" max="1" step="0.01" value="0.5">
         </label>
-        <label class="control" for="param-c">
+        <label class="control classic-param-c" for="param-c">
           <span class="control-head">
             teilung
             <output id="val-c" class="control-val">14 px</output>
@@ -157,6 +161,17 @@
           <input type="range" id="param-c" min="0" max="1" step="0.01" value="0.5">
         </label>
       </div>
+    </section>
+
+    <section class="panel-block lab-tools">
+      <h2 class="panel-label">lab</h2>
+      <label class="control" for="param-lab-split">
+        <span class="control-head">
+          teilungs-abstand
+          <output id="val-lab-split" class="control-val">31 px</output>
+        </span>
+        <input type="range" id="param-lab-split" min="0" max="1" step="0.01" value="0.5">
+      </label>
     </section>
 
     <section class="panel-block lab2-tools">
@@ -196,21 +211,162 @@
         </span>
         <input type="range" id="param-l2-complexity" min="0" max="1" step="0.01" value="0.11">
       </label>
-      <p class="lab2-max-hint">node-limit: <output id="val-l2-maxnodes">4000</output></p>
       <label class="control" for="param-l2-split">
         <span class="control-head">
-          neue node
+          teilungs-abstand
           <output id="val-l2-split" class="control-val">16 px</output>
         </span>
         <input type="range" id="param-l2-split" min="0" max="1" step="0.01" value="0.31">
       </label>
+      <label class="control" for="param-l2-node-limit">
+        <span class="control-head">
+          node-limit
+          <output id="val-l2-node-limit" class="control-val">4000</output>
+        </span>
+        <input type="range" id="param-l2-node-limit" min="0" max="1" step="0.01" value="0.2">
+      </label>
+      <p class="lab2-max-hint">nodes: <output id="val-l2-maxnodes">0 / 4000</output></p>
       <button type="button" id="btn-l2-nodes" class="panel-btn">nodes: aus</button>
+    </section>
+
+    <section class="panel-block diff3d-tools">
+      <h2 class="panel-label">3d growth</h2>
+      <p class="lab2-max-hint">auf die leinwand klicken → seed-knoten setzen</p>
+      <label class="control" for="param-d3-link">
+        <span class="control-head">
+          verbindung
+          <output id="val-d3-link" class="control-val">82 px</output>
+        </span>
+        <input type="range" id="param-d3-link" min="0" max="1" step="0.01" value="0.45">
+      </label>
+      <label class="control" for="param-d3-attraction">
+        <span class="control-head">
+          anziehung
+          <output id="val-d3-attraction" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-d3-attraction" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-d3-repulsion">
+        <span class="control-head">
+          abstoßung
+          <output id="val-d3-repulsion" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-d3-repulsion" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-d3-depth">
+        <span class="control-head">
+          tiefe
+          <output id="val-d3-depth" class="control-val">45%</output>
+        </span>
+        <input type="range" id="param-d3-depth" min="0" max="1" step="0.01" value="0.45">
+      </label>
+      <label class="control" for="param-d3-complexity">
+        <span class="control-head">
+          komplexität
+          <output id="val-d3-complexity" class="control-val">~20</output>
+        </span>
+        <input type="range" id="param-d3-complexity" min="0" max="1" step="0.01" value="0.11">
+      </label>
+      <label class="control" for="param-d3-split">
+        <span class="control-head">
+          teilungs-abstand
+          <output id="val-d3-split" class="control-val">16 px</output>
+        </span>
+        <input type="range" id="param-d3-split" min="0" max="1" step="0.01" value="0.31">
+      </label>
+      <label class="control" for="param-d3-dof-focus">
+        <span class="control-head">
+          fokus
+          <output id="val-d3-dof-focus" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-d3-dof-focus" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-d3-dof-blur">
+        <span class="control-head">
+          unschärfe
+          <output id="val-d3-dof-blur" class="control-val">3 px</output>
+        </span>
+        <input type="range" id="param-d3-dof-blur" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-d3-exposure">
+        <span class="control-head">
+          belichtung
+          <output id="val-d3-exposure" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-d3-exposure" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-d3-tumble">
+        <span class="control-head">
+          kamera-drehung
+          <output id="val-d3-tumble" class="control-val">35%</output>
+        </span>
+        <input type="range" id="param-d3-tumble" min="0" max="1" step="0.01" value="0.35">
+      </label>
+      <label class="control" for="param-d3-node-limit">
+        <span class="control-head">
+          node-limit
+          <output id="val-d3-node-limit" class="control-val">4000</output>
+        </span>
+        <input type="range" id="param-d3-node-limit" min="0" max="1" step="0.01" value="0.2">
+      </label>
+      <p class="lab2-max-hint">nodes: <output id="val-d3-maxnodes">0 / 4000</output></p>
+      <button type="button" id="btn-d3-nodes" class="panel-btn">nodes: aus</button>
+    </section>
+
+    <section class="panel-block dof-tools">
+      <h2 class="panel-label">3d web</h2>
+      <p class="lab2-max-hint">auf die kugel klicken → knoten setzen</p>
+      <label class="control" for="param-dof-link">
+        <span class="control-head">
+          verbindung
+          <output id="val-dof-link" class="control-val">39 px</output>
+        </span>
+        <input type="range" id="param-dof-link" min="0" max="1" step="0.01" value="0.4">
+      </label>
+      <label class="control" for="param-dof-attraction">
+        <span class="control-head">
+          anziehung
+          <output id="val-dof-attraction" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-dof-attraction" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-dof-repulsion">
+        <span class="control-head">
+          abstoßung
+          <output id="val-dof-repulsion" class="control-val">50%</output>
+        </span>
+        <input type="range" id="param-dof-repulsion" min="0" max="1" step="0.01" value="0.5">
+      </label>
+      <label class="control" for="param-dof-split">
+        <span class="control-head">
+          teilungs-abstand
+          <output id="val-dof-split" class="control-val">12 px</output>
+        </span>
+        <input type="range" id="param-dof-split" min="0" max="1" step="0.01" value="0.31">
+      </label>
+      <label class="control" for="param-dof-tumble">
+        <span class="control-head">
+          kugel-drehung
+          <output id="val-dof-tumble" class="control-val">40%</output>
+        </span>
+        <input type="range" id="param-dof-tumble" min="0" max="1" step="0.01" value="0.4">
+      </label>
+      <label class="control" for="param-dof-node-limit">
+        <span class="control-head">
+          node-limit
+          <output id="val-dof-node-limit" class="control-val">4000</output>
+        </span>
+        <input type="range" id="param-dof-node-limit" min="0" max="1" step="0.01" value="0.2">
+      </label>
+      <p class="lab2-max-hint">nodes: <output id="val-dof-maxnodes">0 / 4000</output></p>
+      <button type="button" id="btn-dof-nodes" class="panel-btn">nodes: aus</button>
     </section>
 
     <section class="panel-block panel-actions">
       <h2 class="panel-label">aktionen</h2>
       <button type="button" id="btn-play" class="panel-btn">pause</button>
       <button type="button" id="btn-reset" class="panel-btn">neu wachsen</button>
+      <button type="button" id="btn-l2-legacy" class="panel-btn">klassik (explosion)</button>
       <button type="button" id="btn-svg" class="panel-btn">&darr; svg</button>
       <button type="button" id="btn-save" class="panel-btn">&darr; png</button>
     </section>
@@ -218,9 +374,11 @@
   </aside>
 
   <script src="js/lib/glass-core.js?v=1"></script>
-  <script src="js/lab-growth.js?v=7"></script>
-  <script src="js/lab2-growth.js?v=11"></script>
+  <script src="js/lab-growth.js?v=9"></script>
+  <script src="js/lab2-growth.js?v=27"></script>
+  <script src="js/diff3d-growth.js?v=7"></script>
+  <script src="js/dof-growth.js?v=8"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=72"></script>
+  <script src="js/app.js?v=110"></script>
 </body>
 </html>

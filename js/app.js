@@ -40,7 +40,52 @@ const els = {
   l2Stroke: document.getElementById("param-l2-stroke"),
   l2StrokeVal: document.getElementById("val-l2-stroke"),
   l2MaxNodes: document.getElementById("val-l2-maxnodes"),
+  l2NodeLimit: document.getElementById("param-l2-node-limit"),
+  l2NodeLimitVal: document.getElementById("val-l2-node-limit"),
   l2Nodes: document.getElementById("btn-l2-nodes"),
+  l2Legacy: document.getElementById("btn-l2-legacy"),
+  labSplit: document.getElementById("param-lab-split"),
+  labSplitVal: document.getElementById("val-lab-split"),
+  d3Attraction: document.getElementById("param-d3-attraction"),
+  d3AttractionVal: document.getElementById("val-d3-attraction"),
+  d3Repulsion: document.getElementById("param-d3-repulsion"),
+  d3RepulsionVal: document.getElementById("val-d3-repulsion"),
+  d3Depth: document.getElementById("param-d3-depth"),
+  d3DepthVal: document.getElementById("val-d3-depth"),
+  d3Link: document.getElementById("param-d3-link"),
+  d3LinkVal: document.getElementById("val-d3-link"),
+  d3Complexity: document.getElementById("param-d3-complexity"),
+  d3ComplexityVal: document.getElementById("val-d3-complexity"),
+  d3Split: document.getElementById("param-d3-split"),
+  d3SplitVal: document.getElementById("val-d3-split"),
+  d3DofFocus: document.getElementById("param-d3-dof-focus"),
+  d3DofFocusVal: document.getElementById("val-d3-dof-focus"),
+  d3DofBlur: document.getElementById("param-d3-dof-blur"),
+  d3DofBlurVal: document.getElementById("val-d3-dof-blur"),
+  d3Exposure: document.getElementById("param-d3-exposure"),
+  d3ExposureVal: document.getElementById("val-d3-exposure"),
+  d3Tumble: document.getElementById("param-d3-tumble"),
+  d3TumbleVal: document.getElementById("val-d3-tumble"),
+  d3NodeLimit: document.getElementById("param-d3-node-limit"),
+  d3NodeLimitVal: document.getElementById("val-d3-node-limit"),
+  d3MaxNodes: document.getElementById("val-d3-maxnodes"),
+  d3Nodes: document.getElementById("btn-d3-nodes"),
+  dofLink: document.getElementById("param-dof-link"),
+  dofLinkVal: document.getElementById("val-dof-link"),
+  dofAttraction: document.getElementById("param-dof-attraction"),
+  dofAttractionVal: document.getElementById("val-dof-attraction"),
+  dofRepulsion: document.getElementById("param-dof-repulsion"),
+  dofRepulsionVal: document.getElementById("val-dof-repulsion"),
+  dofDepth: document.getElementById("param-dof-depth"),
+  dofDepthVal: document.getElementById("val-dof-depth"),
+  dofSplit: document.getElementById("param-dof-split"),
+  dofSplitVal: document.getElementById("val-dof-split"),
+  dofTumble: document.getElementById("param-dof-tumble"),
+  dofTumbleVal: document.getElementById("val-dof-tumble"),
+  dofNodeLimit: document.getElementById("param-dof-node-limit"),
+  dofNodeLimitVal: document.getElementById("val-dof-node-limit"),
+  dofMaxNodes: document.getElementById("val-dof-maxnodes"),
+  dofNodes: document.getElementById("btn-dof-nodes"),
 };
 
 const state = {
@@ -63,21 +108,74 @@ const state = {
     push: 0.5,
     split: 0.31,
     complexity: 0.11, // ~20 start-knoten
+    nodeLimit: 0.2, // ~4000 nodes
+    showNodes: false,
+    legacy: false, // alte "explosions"-version (linien überschneiden sich)
+  },
+  lab: {
+    split: 0.5, // ~31 px teilungs-abstand
+  },
+  diff3d: {
+    attraction: 0.5,
+    repulsion: 0.5,
+    depth: 0.45,
+    link: 0.45,
+    split: 0.31,
+    complexity: 0.11,
+    nodeLimit: 0.2,
+    dofFocus: 0.5,
+    dofBlur: 0.5,
+    dofExp: 0.5,
+    dofSamples: 0.5,
+    exposure: 0.5,
+    tumble: 0.35,
+    graph: null,
+    showNodes: false,
+  },
+  dof: {
+    attraction: 0.5,
+    repulsion: 0.5,
+    depth: 0.45,
+    link: 0.4,
+    split: 0.31,
+    complexity: 0.11,
+    nodeLimit: 0.2,
+    tumble: 0.4,
+    graph: null,
     showNodes: false,
   },
 };
 
 const SCALE = 4; // raster der maske (px pro zelle)
 const FONT_STACK = '"Helvetica Neue", Helvetica, Arial, sans-serif'; // identisch zum eingabefeld
+const STORAGE_KEY_SPEED = "weirdgrowth-speed";
+
+function loadSpeedFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SPEED);
+    if (raw == null) return;
+    const v = parseFloat(raw);
+    if (Number.isFinite(v)) state.speed = clamp(v, 0.2, 5);
+  } catch (err) {
+    /* ignore */
+  }
+}
+
+function saveSpeedToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY_SPEED, String(state.speed));
+  } catch (err) {
+    /* ignore */
+  }
+}
+
+function syncSpeedUI() {
+  if (!els.speed || !els.speedVal) return;
+  els.speed.value = String(state.speed);
+  els.speedVal.textContent = `${state.speed.toFixed(1)}×`;
+}
 
 const MODES = {
-  adern: {
-    desc:
-      "Differential line growth — die Buchstaben-Kontur wächst organisch nach außen, Linien stoßen sich ab und füllen den Raum.",
-    fmtA: (v) => `${Math.round(6 + v * 14)} px`,
-    fmtB: (v) => `${Math.round(14 + v * 36)} px`,
-    fmtC: (v) => `${Math.round(5 + v * 18)} px`,
-  },
   reactor: {
     desc: ReactorGrowthMode.desc,
     fmtA: ReactorGrowthMode.fmtA,
@@ -96,9 +194,21 @@ const MODES = {
     fmtB: Lab2GrowthMode.fmtB,
     fmtC: Lab2GrowthMode.fmtC,
   },
+  diff3d: {
+    desc: Diff3GrowthMode.desc,
+    fmtA: Diff3GrowthMode.fmtA,
+    fmtB: Diff3GrowthMode.fmtB,
+    fmtC: Diff3GrowthMode.fmtC,
+  },
+  dof: {
+    desc: DofGrowthMode.desc,
+    fmtA: DofGrowthMode.fmtA,
+    fmtB: DofGrowthMode.fmtB,
+    fmtC: DofGrowthMode.fmtC,
+  },
 };
 
-const seed = { mw: 0, mh: 0, mask: null };
+const seed = { mw: 0, mh: 0, mask: null, maskScale: SCALE };
 
 let drawG = null; // live-vorschau während des strichs
 let drawSeedG = null; // unsichtbare kumulative seed-ebene (für reset/clear)
@@ -146,8 +256,6 @@ function drawSeedText(gfx, txt, w, h) {
 function refreshSeed(p) {
   const w = p.width;
   const h = p.height;
-  const mw = Math.max(8, Math.floor(w / SCALE));
-  const mh = Math.max(8, Math.floor(h / SCALE));
 
   const src = p.createGraphics(w, h);
   src.pixelDensity(1);
@@ -163,57 +271,120 @@ function refreshSeed(p) {
     src.image(drawG, 0, 0);
   }
 
-  src.loadPixels();
-  const px = src.pixels;
-  const mask = new Uint8Array(mw * mh);
-  for (let gy = 0; gy < mh; gy++) {
-    const sy = Math.min(h - 1, (gy * SCALE + (SCALE >> 1)) | 0);
-    for (let gx = 0; gx < mw; gx++) {
-      const sx = Math.min(w - 1, (gx * SCALE + (SCALE >> 1)) | 0);
-      if (px[(sy * w + sx) * 4 + 3] > 110) mask[gy * mw + gx] = 1;
-    }
-  }
+  const drawOpts = state.input === "draw" ? drawExtractOpts() : null;
+  const { mask, mw, mh } = maskFromGraphics(src, w, h, drawOpts);
   src.remove();
 
   seed.mw = mw;
   seed.mh = mh;
   seed.mask = mask;
+  seed.maskScale = drawOpts?.scale ?? SCALE;
 }
 
-function graphicsToMask(gfx, w, h) {
+function dilateMask(mask, mw, mh, radius) {
+  if (!radius || radius < 1) return mask;
+  const out = new Uint8Array(mask.length);
+  for (let gy = 0; gy < mh; gy++) {
+    for (let gx = 0; gx < mw; gx++) {
+      if (!mask[gy * mw + gx]) continue;
+      for (let dy = -radius; dy <= radius; dy++) {
+        for (let dx = -radius; dx <= radius; dx++) {
+          const nx = gx + dx;
+          const ny = gy + dy;
+          if (nx >= 0 && nx < mw && ny >= 0 && ny < mh) out[ny * mw + nx] = 1;
+        }
+      }
+    }
+  }
+  return out;
+}
+
+function maskFromGraphics(gfx, w, h, opts) {
+  const scale = opts?.scale ?? SCALE;
+  const alphaThreshold = opts?.alphaThreshold ?? 110;
+  const scanCell = scale <= 2;
+
   gfx.loadPixels();
   const px = gfx.pixels;
   const d = typeof gfx.pixelDensity === "function" ? gfx.pixelDensity() : 1;
   const pw = Math.max(1, Math.floor(w * d));
   const ph = Math.max(1, Math.floor(h * d));
-  const mw = Math.max(8, Math.floor(w / SCALE));
-  const mh = Math.max(8, Math.floor(h / SCALE));
+  const mw = Math.max(8, Math.floor(w / scale));
+  const mh = Math.max(8, Math.floor(h / scale));
   const mask = new Uint8Array(mw * mh);
+
   for (let gy = 0; gy < mh; gy++) {
-    const sy = Math.min(ph - 1, ((gy * SCALE + (SCALE >> 1)) | 0) * d);
+    const y0 = gy * scale;
+    const y1 = Math.min(ph, y0 + scale);
     for (let gx = 0; gx < mw; gx++) {
-      const sx = Math.min(pw - 1, ((gx * SCALE + (SCALE >> 1)) | 0) * d);
-      if (px[(sy * pw + sx) * 4 + 3] > 110) mask[gy * mw + gx] = 1;
+      const x0 = gx * scale;
+      const x1 = Math.min(pw, x0 + scale);
+      let hit = false;
+      if (scanCell) {
+        for (let sy = y0; sy < y1 && !hit; sy++) {
+          for (let sx = x0; sx < x1 && !hit; sx++) {
+            if (px[(sy * pw + sx) * 4 + 3] > alphaThreshold) hit = true;
+          }
+        }
+      } else {
+        const sy = Math.min(ph - 1, (y0 + (scale >> 1)) * d);
+        const sx = Math.min(pw - 1, (x0 + (scale >> 1)) * d);
+        hit = px[(sy * pw + sx) * 4 + 3] > alphaThreshold;
+      }
+      if (hit) mask[gy * mw + gx] = 1;
     }
   }
+
+  if (opts?.dilate) return { mask: dilateMask(mask, mw, mh, opts.dilate), mw, mh };
   return { mask, mw, mh };
+}
+
+function graphicsToMask(gfx, w, h, opts) {
+  return maskFromGraphics(gfx, w, h, opts);
+}
+
+function drawExtractOpts() {
+  const sw = drawPreviewStrokeW();
+  const scale = sw <= 1.5 ? 1 : sw <= 8 ? 2 : SCALE;
+  return {
+    scale,
+    minArea: 1,
+    minBoundary: sw <= 8 ? 3 : 8,
+    minContourPts: sw <= 8 ? 3 : 4,
+    dilate: sw <= 1.5 ? 2 : sw <= 8 ? 1 : 0,
+    alphaThreshold: sw <= 8 ? 32 : 110,
+  };
 }
 
 function contoursFromGraphics(gfx, w, h, relaxed) {
   if (!gfx) return [];
-  const { mask, mw, mh } = graphicsToMask(gfx, w, h);
-  return extractContoursFromMask(mask, mw, mh, SCALE, relaxed ? { minArea: 4 } : undefined);
+  const opts = relaxed ? drawExtractOpts() : undefined;
+  const { mask, mw, mh } = graphicsToMask(gfx, w, h, opts);
+  const scale = opts?.scale ?? SCALE;
+  const extractOpts = relaxed
+    ? {
+        minArea: opts.minArea,
+        minBoundary: opts.minBoundary,
+        minContourPts: opts.minContourPts,
+      }
+    : undefined;
+  return extractContoursFromMask(mask, mw, mh, scale, extractOpts);
 }
 
 function extractNewDrawContours(beforeG, afterG, w, h) {
-  const after = graphicsToMask(afterG, w, h);
+  const opts = drawExtractOpts();
+  const after = graphicsToMask(afterG, w, h, opts);
   let beforeMask = null;
-  if (beforeG) beforeMask = graphicsToMask(beforeG, w, h).mask;
+  if (beforeG) beforeMask = graphicsToMask(beforeG, w, h, opts).mask;
   const diff = new Uint8Array(after.mask.length);
   for (let i = 0; i < diff.length; i++) {
     diff[i] = after.mask[i] && (!beforeMask || !beforeMask[i]) ? 1 : 0;
   }
-  return extractContoursFromMask(diff, after.mw, after.mh, SCALE, { minArea: 4 });
+  return extractContoursFromMask(diff, after.mw, after.mh, opts.scale, {
+    minArea: opts.minArea,
+    minBoundary: opts.minBoundary,
+    minContourPts: opts.minContourPts,
+  });
 }
 
 function captureDrawStrokeBefore(p) {
@@ -277,23 +448,60 @@ function trimContourCandidates(candidates, maxCount) {
   return candidates;
 }
 
-function sanitizeContours(contours, w, h) {
+function sanitizeContourPts(pts, maxW, maxH, maxArea, minPts) {
+  const need = minPts ?? 4;
+  if (!pts || pts.length < need) return null;
+  const m = contourBBoxMetrics(pts);
+  if (m.bw > maxW || m.bh > maxH || m.area > maxArea) return null;
+  return pts;
+}
+
+function sanitizeContourHolePts(pts, maxW, maxH, maxArea) {
+  if (!pts || pts.length < 3) return null;
+  const m = contourBBoxMetrics(pts);
+  if (m.bw > maxW || m.bh > maxH || m.area > maxArea) return null;
+  return pts;
+}
+
+function sanitizeContours(contours, w, h, opts) {
   if (!contours || !contours.length) return [];
   const maxW = w * GROWTH_MAX_BBOX_FRAC;
   const maxH = h * GROWTH_MAX_BBOX_FRAC;
   const maxArea = w * h * 0.42;
+  const minPts = opts?.minPts ?? 4;
   const valid = [];
 
   for (let i = 0; i < contours.length; i++) {
-    const pts = contours[i];
-    if (!pts || pts.length < 4) continue;
-    const m = contourBBoxMetrics(pts);
-    if (m.bw > maxW || m.bh > maxH || m.area > maxArea) continue;
-    valid.push({ pts, area: m.area });
+    const entry = contours[i];
+    if (isCompoundContour(entry)) {
+      const outer = sanitizeContourPts(
+        clampContourPoints(entry.outer, GROWTH_MAX_POINTS_PER_CONTOUR),
+        maxW,
+        maxH,
+        maxArea,
+        minPts
+      );
+      if (!outer) continue;
+      const holes = [];
+      for (let hi = 0; hi < (entry.holes || []).length; hi++) {
+        const hole = sanitizeContourHolePts(
+          clampContourPoints(entry.holes[hi], GROWTH_MAX_POINTS_PER_CONTOUR),
+          maxW,
+          maxH,
+          maxArea
+        );
+        if (hole) holes.push(hole);
+      }
+      valid.push({ pts: outer, area: contourBBoxMetrics(outer).area, compound: { outer, holes } });
+      continue;
+    }
+    const pts = sanitizeContourPts(entry, maxW, maxH, maxArea, minPts);
+    if (!pts) continue;
+    valid.push({ pts, area: contourBBoxMetrics(pts).area });
   }
 
   return trimContourCandidates(valid, GROWTH_MAX_CONTOURS).map((v) =>
-    clampContourPoints(v.pts, GROWTH_MAX_POINTS_PER_CONTOUR)
+    v.compound ? v.compound : clampContourPoints(v.pts, GROWTH_MAX_POINTS_PER_CONTOUR)
   );
 }
 
@@ -319,7 +527,7 @@ function commitDrawStroke(p) {
   if (contours.length === 0 && drawSeedG && !simHasGrowth()) {
     contours = contoursFromGraphics(drawSeedG, p.width, p.height, true);
   }
-  contours = sanitizeContours(contours, p.width, p.height);
+  contours = sanitizeContours(contours, p.width, p.height, { minPts: 3 });
   if (contours.length === 0) return;
 
   if (!simHasGrowth()) {
@@ -424,7 +632,8 @@ function extractContoursFromMask(mask, mw, mh, scale, opts) {
   );
 
   const contours = [];
-  const linkDist = SCALE * 2.2;
+  const linkDist = scale * 2.2;
+  const minContourPts = opts && opts.minContourPts != null ? opts.minContourPts : 4;
 
   for (let c = 0; c < relevant.length; c++) {
     const comp = relevant[c];
@@ -452,10 +661,11 @@ function extractContoursFromMask(mask, mw, mh, scale, opts) {
       if (edge) boundary.push({ x: (gx + 0.5) * scale, y: (gy + 0.5) * scale });
     }
 
-    if (boundary.length < 8) continue;
+    const minBoundary = opts && opts.minBoundary != null ? opts.minBoundary : 8;
+    if (boundary.length < minBoundary) continue;
     const chained = chainBoundaryPoints(boundary, linkDist);
     const simplified = subsampleChain(chained, nodesPerContour);
-    if (simplified.length >= 4) contours.push(simplified);
+    if (simplified.length >= minContourPts) contours.push(simplified);
   }
   return contours;
 }
@@ -518,14 +728,14 @@ function measureSeedFontSize(ctx, text, w, h, family, weight) {
   return Math.max(22, size);
 }
 
-function makeBinaryFromCanvas(ctx, w, h) {
+function makeBinaryFromCanvas(ctx, w, h, threshold = 128) {
   const img = ctx.getImageData(0, 0, w, h);
   const data = img.data;
   const bin = new Uint8Array(w * h);
   for (let y = 0; y < h; y++) {
     for (let x = 0; x < w; x++) {
       const i = (y * w + x) * 4;
-      bin[y * w + x] = data[i + 3] > 128 ? 1 : 0;
+      bin[y * w + x] = data[i + 3] > threshold ? 1 : 0;
     }
   }
   return bin;
@@ -950,6 +1160,330 @@ function lab2PickCharContours(outers, fontSizePx) {
   return kept;
 }
 
+function lab2DedupeTracedRings(ptsList) {
+  if (ptsList.length <= 1) return ptsList;
+  const parts = lab2ContourParts(ptsList);
+  const keep = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    let dup = false;
+    for (let k = 0; k < keep.length; k++) {
+      const m = keep[k];
+      const ratio = p.area / (m.area || 1);
+      if (ratio < 0.7 || ratio > 1.42) continue;
+      const dist = Math.hypot(p.cent.x - m.cent.x, p.cent.y - m.cent.y);
+      const overlap = lab2BboxOverlap(p.bbox, m.bbox);
+      const minBox = Math.min(p.bbox.bw * p.bbox.bh, m.bbox.bw * m.bbox.bh);
+      if (dist < 8 || (minBox > 0 && overlap > minBox * 0.62)) {
+        dup = true;
+        break;
+      }
+    }
+    if (!dup) keep.push(p);
+  }
+  return keep.map((p) => p.pts);
+}
+
+// pro buchstabe: genau eine glyph-form { outer, holes[] } (+ getrennte teile wie i-tüpfel)
+function lab2ContourParts(ptsList) {
+  return ptsList
+    .map((pts) => ({
+      pts,
+      area: Math.abs(contourSignedArea(pts)),
+      cent: contourCentroid(pts),
+      bbox: contourBBoxMetrics(pts),
+    }))
+    .filter((p) => p.area > 0)
+    .sort((a, b) => b.area - a.area);
+}
+
+function lab2BboxOverlap(a, b) {
+  const overlapW = Math.max(0, Math.min(a.maxX, b.maxX) - Math.max(a.minX, b.minX));
+  const overlapH = Math.max(0, Math.min(a.maxY, b.maxY) - Math.max(a.minY, b.minY));
+  return overlapW * overlapH;
+}
+
+function processLab2SmallContour(c, maxEdge) {
+  if (!c || c.length < 3) return null;
+  if (contourGap(c) > Math.max(4, maxEdge * 0.65)) return null;
+  const spacing = Math.max(1.5, maxEdge * 0.42);
+  const res = resampleContourTR(c, spacing, 800);
+  const final = normalizeClosedContour(res);
+  return final && final.length >= 3 ? final : null;
+}
+
+function lab2CullDuplicateParts(parts) {
+  const kept = [];
+  for (let i = 0; i < parts.length; i++) {
+    const p = parts[i];
+    let dup = false;
+    for (let k = 0; k < kept.length; k++) {
+      const m = kept[k];
+      const areaRatio = p.area / (m.area || 1);
+      if (areaRatio < 0.3 || areaRatio > 3.3) continue;
+      if (Math.hypot(p.cent.x - m.cent.x, p.cent.y - m.cent.y) < 6) {
+        dup = true;
+        break;
+      }
+      const minArea = Math.min(p.bbox.bw * p.bbox.bh, m.bbox.bw * m.bbox.bh);
+      if (minArea > 0 && lab2BboxOverlap(p.bbox, m.bbox) > minArea * 0.78) {
+        dup = true;
+        break;
+      }
+    }
+    if (!dup) kept.push(p);
+  }
+  return kept;
+}
+
+function lab2DedupeHoleContours(holes) {
+  const out = [];
+  for (let i = 0; i < holes.length; i++) {
+    const h = holes[i];
+    const c = contourCentroid(h);
+    let dup = false;
+    for (let j = 0; j < out.length; j++) {
+      const ec = contourCentroid(out[j]);
+      if (Math.hypot(c.x - ec.x, c.y - ec.y) < 4) {
+        dup = true;
+        break;
+      }
+    }
+    if (!dup) out.push(h);
+  }
+  return out;
+}
+
+function processLab2HoleContour(c, maxEdge) {
+  if (!c || c.length < 3) return null;
+  const spacing = Math.max(2, maxEdge * 0.48);
+  const res = resampleContourTR(openContourRing(c), spacing, 500);
+  const pruned = removeCollinearTR(res, 5, 0.45, spacing);
+  const final = normalizeClosedContour(pruned.length >= 3 ? pruned : res);
+  return final && final.length >= 3 ? final : null;
+}
+
+function lab2PickBestHoles(outer, holes) {
+  if (!holes || holes.length <= 1) return holes || [];
+  const ranked = holes
+    .map((pts) => ({
+      pts,
+      area: Math.abs(contourSignedArea(pts)),
+      cent: contourCentroid(pts),
+    }))
+    .filter((h) => pointInPolygon(h.cent.x, h.cent.y, outer))
+    .sort((a, b) => b.area - a.area);
+  if (!ranked.length) return [holes[0]];
+  const keep = [ranked[0].pts];
+  for (let i = 1; i < ranked.length; i++) {
+    if (ranked[i].area < ranked[0].area * 0.18) continue;
+    if (Math.hypot(ranked[i].cent.x - ranked[0].cent.x, ranked[i].cent.y - ranked[0].cent.y) > 14) {
+      keep.push(ranked[i].pts);
+      if (keep.length >= 2) break;
+    }
+  }
+  return keep;
+}
+
+function lab2SmoothCompoundGlyph(glyph, maxEdge) {
+  if (!isCompoundContour(glyph)) return glyph;
+  const holes = (glyph.holes || [])
+    .map((h) => processLab2HoleContour(h, maxEdge) || h);
+  const best = lab2PickBestHoles(glyph.outer, lab2DedupeHoleContours(holes));
+  return best.length ? { outer: glyph.outer, holes: best } : glyph.outer;
+}
+
+function lab2CharExpectsCounter(ch) {
+  return /[0-9OoQqDdRrPpBbAa]/.test(ch);
+}
+
+function traceLab2CharContours(charCtx, charCanvas, ch, cw, cellH, line, mapBase) {
+  function traceAt(raster) {
+    const rw = Math.max(16, Math.ceil(cw * raster));
+    const rh = Math.max(16, Math.ceil(cellH * raster));
+    charCanvas.width = rw;
+    charCanvas.height = rh;
+    charCtx.setTransform(1, 0, 0, 1, 0, 0);
+    charCtx.clearRect(0, 0, rw, rh);
+    charCtx.scale(raster, raster);
+    charCtx.font = line.font;
+    charCtx.textBaseline = "alphabetic";
+    charCtx.textAlign = "left";
+    charCtx.fillStyle = "#fff";
+    charCtx.fillText(ch, line.pad, line.localBaselineY);
+
+    const bin = makeBinaryFromCanvas(
+      charCtx,
+      rw,
+      rh,
+      lab2CharExpectsCounter(ch) ? 148 : 128
+    );
+    const mapToWorld = (px, py) => mapBase(px / raster, py / raster);
+    return traceContoursMoore(bin, rw, rh, mapToWorld);
+  }
+
+  let raw = traceAt(3);
+  if (raw.length < 2 && lab2CharExpectsCounter(ch)) {
+    const hi = traceAt(5);
+    if (hi.length > raw.length) raw = hi;
+  }
+  charCtx.setTransform(1, 0, 0, 1, 0, 0);
+  return raw;
+}
+
+function lab2GlyphEntryFromPts(pts) {
+  const ring = openContourRing(pts);
+  return {
+    pts: ring,
+    area: Math.abs(contourSignedArea(ring)),
+    cent: contourCentroid(ring),
+    bbox: contourBBoxMetrics(ring),
+  };
+}
+
+function lab2AssignHolesToOuter(main, holeEntries, used) {
+  const holes = [];
+  const maxHoleArea = main.area * 0.97;
+  for (let j = 0; j < holeEntries.length; j++) {
+    if (used[j]) continue;
+    const h = holeEntries[j];
+    if (h.area >= maxHoleArea) continue;
+    const inPoly = pointInPolygon(h.cent.x, h.cent.y, main.pts);
+    const inBox = h.cent.x >= main.bbox.minX && h.cent.x <= main.bbox.maxX
+      && h.cent.y >= main.bbox.minY && h.cent.y <= main.bbox.maxY;
+    if (!inPoly && !inBox) continue;
+    if (!inPoly && h.area > main.area * 0.6) continue;
+    holes.push(h.pts);
+    used[j] = 1;
+  }
+  return holes;
+}
+
+function lab2GlyphsFromTraced(ptsList, fontSizePx) {
+  if (!ptsList.length) return [];
+  const classified = classifyContoursAsHoles(ptsList);
+  const minGlyphArea = (fontSizePx * 0.05) ** 2;
+  const minHoleArea = (fontSizePx * 0.004) ** 2;
+
+  const outerEntries = [];
+  const holeEntries = [];
+  for (let i = 0; i < classified.length; i++) {
+    const e = lab2GlyphEntryFromPts(classified[i].pts);
+    if (e.area < minHoleArea) continue;
+    if (classified[i].isHole) holeEntries.push(e);
+    else if (e.area >= minGlyphArea) outerEntries.push(e);
+  }
+
+  if (!outerEntries.length && classified.length) {
+    const largest = lab2GlyphEntryFromPts(classified[0].pts);
+    if (largest.area >= minGlyphArea) outerEntries.push(largest);
+  }
+
+  outerEntries.sort((a, b) => b.area - a.area);
+  const used = new Uint8Array(holeEntries.length);
+  const glyphs = [];
+
+  for (let i = 0; i < outerEntries.length; i++) {
+    const main = outerEntries[i];
+    const holes = lab2AssignHolesToOuter(main, holeEntries, used);
+    const uniqueHoles = lab2DedupeHoleContours(holes);
+    glyphs.push(uniqueHoles.length ? { outer: main.pts, holes: uniqueHoles } : main.pts);
+  }
+
+  if (glyphs.length && outerEntries.length) {
+    const extra = [];
+    for (let j = 0; j < holeEntries.length; j++) {
+      if (used[j]) continue;
+      if (pointInPolygon(holeEntries[j].cent.x, holeEntries[j].cent.y, outerEntries[0].pts)) {
+        extra.push(holeEntries[j].pts);
+        used[j] = 1;
+      }
+    }
+    if (extra.length) {
+      const g = lab2UnpackGlyph(glyphs[0]);
+      const holes = lab2DedupeHoleContours(g.holes.concat(extra));
+      glyphs[0] = holes.length ? { outer: g.outer, holes } : g.outer;
+    }
+  }
+
+  return glyphs;
+}
+
+function lab2UnpackGlyph(g) {
+  if (isCompoundContour(g)) {
+    return {
+      outer: g.outer,
+      holes: g.holes ? g.holes.slice() : [],
+      area: Math.abs(contourSignedArea(g.outer)),
+    };
+  }
+  return { outer: g, holes: [], area: Math.abs(contourSignedArea(g)) };
+}
+
+// pro zeichen: eine hauptform (+ punzen), doppel-außenkonturen entfernen, i-tüpfel extra
+function lab2ConsolidateCharGlyphs(glyphs, fontSizePx) {
+  if (!glyphs || !glyphs.length) return glyphs;
+  if (glyphs.length === 1) {
+    const g = lab2UnpackGlyph(glyphs[0]);
+    const holes = lab2DedupeHoleContours(g.holes);
+    return holes.length ? [{ outer: g.outer, holes }] : [g.outer];
+  }
+  const parts = glyphs.map(lab2UnpackGlyph).sort((a, b) => b.area - a.area);
+  const used = new Uint8Array(parts.length);
+  const result = [];
+
+  for (let i = 0; i < parts.length; i++) {
+    if (used[i]) continue;
+    const main = parts[i];
+    used[i] = 1;
+
+    for (let j = i + 1; j < parts.length; j++) {
+      if (used[j]) continue;
+      const p = parts[j];
+      const cent = contourCentroid(p.outer);
+      const pBox = contourBBoxMetrics(p.outer);
+      const dist = distPointToContour(cent.x, cent.y, main.outer);
+      const overlap = lab2BboxOverlap(contourBBoxMetrics(main.outer), pBox);
+      const areaRatio = p.area / (main.area || 1);
+
+      if (pointInPolygon(cent.x, cent.y, main.outer) && p.area < main.area * 0.97) {
+        main.holes.push(p.outer, ...p.holes);
+        used[j] = 1;
+        continue;
+      }
+
+      if (
+        dist < 5
+        || (areaRatio > 0.5 && areaRatio < 1.85 && overlap > pBox.bw * pBox.bh * 0.42)
+      ) {
+        main.holes.push(...p.holes);
+        used[j] = 1;
+      }
+    }
+
+    const holes = lab2DedupeHoleContours(main.holes);
+    result.push(holes.length ? { outer: main.outer, holes } : main.outer);
+  }
+
+  for (let j = 0; j < parts.length; j++) {
+    if (used[j]) continue;
+    const p = parts[j];
+    const holes = lab2DedupeHoleContours(p.holes);
+    result.push(holes.length ? { outer: p.outer, holes } : p.outer);
+  }
+
+  return result;
+}
+
+function isCompoundContour(c) {
+  return !!(c && c.outer && Array.isArray(c.outer));
+}
+
+function contourRings(c) {
+  if (isCompoundContour(c)) return [c.outer].concat(c.holes || []);
+  return c && c.length >= 2 ? [c] : [];
+}
+
 function sanitizeReactorContours(contours, w, h) {
   if (!contours || !contours.length) return [];
   const maxW = w * GROWTH_MAX_BBOX_FRAC;
@@ -1141,36 +1675,23 @@ function generateLab2TextContours(text, w, h, family, weight, maxEdge) {
     }
 
     const cw = Math.max(12, Math.ceil(chW + line.pad * 2));
-    charCanvas.width = cw;
-    charCanvas.height = cellH;
-    charCtx.clearRect(0, 0, cw, cellH);
-    charCtx.font = line.font;
-    charCtx.textBaseline = "alphabetic";
-    charCtx.textAlign = "left";
-    charCtx.fillStyle = "#fff";
-    charCtx.fillText(ch, line.pad, line.localBaselineY);
-
-    let bin = makeBinaryFromCanvas(charCtx, cw, cellH);
-    bin = morphCloseBinary(bin, cw, cellH);
-    bin = morphCloseBinary(bin, cw, cellH);
-    if (!bin) {
-      penX += chW;
-      continue;
-    }
-
-    const mapToWorld = (px, py) => ({
-      x: startX + penX + (px - line.pad),
-      y: line.worldBaselineY + (py - line.localBaselineY),
+    const mapBase = (lx, ly) => ({
+      x: startX + penX + (lx - line.pad),
+      y: line.worldBaselineY + (ly - line.localBaselineY),
     });
 
-    const raw = traceContoursMoore(bin, cw, cellH, mapToWorld);
+    const raw = traceLab2CharContours(charCtx, charCanvas, ch, cw, cellH, line, mapBase);
     const ptsList = [];
     for (let r = 0; r < raw.length; r++) {
-      const final = processReactorContour(raw[r], maxEdge);
+      let final = processReactorContour(raw[r], maxEdge);
+      if (!final) final = processLab2SmallContour(raw[r], maxEdge);
       if (final) ptsList.push(final);
     }
 
-    const picked = lab2PickCharContours(lab2OuterContoursOnly(ptsList), line.fontSizePx);
+    const picked = lab2ConsolidateCharGlyphs(
+      lab2GlyphsFromTraced(lab2DedupeTracedRings(ptsList), line.fontSizePx),
+      line.fontSizePx
+    ).map((g) => lab2SmoothCompoundGlyph(g, maxEdge));
     for (let o = 0; o < picked.length; o++) contours.push(picked[o]);
 
     penX += chW;
@@ -1553,10 +2074,20 @@ function contoursToGrowthLines(contours) {
 
 // gemeinsame kontur-initialisierung — ändert weder physik noch darstellung
 function buildGrowthLines(w, h) {
+  const maskScale = seed.maskScale ?? SCALE;
+  const drawOpts = state.input === "draw" ? drawExtractOpts() : null;
+  const extractOpts = drawOpts
+    ? {
+        minArea: drawOpts.minArea,
+        minBoundary: drawOpts.minBoundary,
+        minContourPts: drawOpts.minContourPts,
+      }
+    : undefined;
   const contours = sanitizeContours(
-    extractContoursFromMask(seed.mask, seed.mw, seed.mh, SCALE),
+    extractContoursFromMask(seed.mask, seed.mw, seed.mh, maskScale, extractOpts),
     w,
-    h
+    h,
+    drawOpts ? { minPts: 3 } : undefined
   );
   return contoursToGrowthLines(contours);
 }
@@ -1564,9 +2095,14 @@ function buildGrowthLines(w, h) {
 // lab2 (differential growth): nodes an der schrift-outline (text) bzw. entlang
 // der gezeichneten linie (draw). text nutzt die hochauflösende canvas-outline.
 function buildLab2Contours(w, h) {
-  const prm = typeof lab2ComputeParams === "function"
-    ? lab2ComputeParams(state.lab2 || {}, w, h)
-    : { seedSpacing: 5 };
+  const paramsState =
+    state.mode === "diff3d" ? state.diff3d || {} : state.lab2 || {};
+  const prm =
+    state.mode === "diff3d" && typeof diff3ComputeParams === "function"
+      ? diff3ComputeParams(paramsState, w, h)
+      : typeof lab2ComputeParams === "function"
+        ? lab2ComputeParams(paramsState, w, h)
+        : { seedSpacing: 5 };
   const seedSpacing = prm.seedSpacing;
   let contours;
   if (state.input === "text") {
@@ -1581,19 +2117,64 @@ function buildLab2Contours(w, h) {
       seedSpacing
     );
   } else {
-    contours = extractContoursFromMask(seed.mask, seed.mw, seed.mh, SCALE).map((pts) => {
+    const maskScale = seed.maskScale ?? SCALE;
+    const drawOpts = state.input === "draw" ? drawExtractOpts() : null;
+    const extractOpts = drawOpts
+      ? {
+          minArea: drawOpts.minArea,
+          minBoundary: drawOpts.minBoundary,
+          minContourPts: drawOpts.minContourPts,
+        }
+      : undefined;
+    contours = extractContoursFromMask(seed.mask, seed.mw, seed.mh, maskScale, extractOpts).map((pts) => {
       const resampled = processReactorContour(pts, seedSpacing);
       return resampled || pts;
     });
   }
-  return sanitizeContours(contours, w, h);
+  return sanitizeContours(
+    contours,
+    w,
+    h,
+    state.input === "draw" ? { minPts: 3 } : undefined
+  );
+}
+
+function countSimNodes() {
+  if (!sim || !sim.getLines) return 0;
+  const lines = sim.getLines();
+  let n = 0;
+  for (let i = 0; i < lines.length; i++) {
+    const nodes = lines[i].nodes;
+    if (nodes) n += nodes.length;
+    const holes = lines[i].holes;
+    if (holes) {
+      for (let hi = 0; hi < holes.length; hi++) {
+        if (holes[hi]) n += holes[hi].length;
+      }
+    }
+  }
+  return n;
+}
+
+function refreshDiff3MaxNodesLabel() {
+  if (!els.d3MaxNodes) return;
+  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.diff3d) : 4000;
+  const cur = sim && typeof sim.totalNodes === "function" ? sim.totalNodes() : 0;
+  els.d3MaxNodes.textContent = `${cur} / ${max}`;
+}
+
+function refreshDofMaxNodesLabel() {
+  if (!els.dofMaxNodes) return;
+  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.dof) : 4000;
+  const cur = state.mode === "dof" && sim && typeof sim.totalNodes === "function" ? sim.totalNodes() : 0;
+  els.dofMaxNodes.textContent = `${cur} / ${max}`;
 }
 
 function refreshLab2MaxNodesLabel() {
   if (!els.l2MaxNodes) return;
-  els.l2MaxNodes.textContent = typeof lab2MaxNodes === "function"
-    ? String(lab2MaxNodes())
-    : "4000";
+  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.lab2) : 4000;
+  const cur = state.mode === "lab2" ? countSimNodes() : 0;
+  els.l2MaxNodes.textContent = `${cur} / ${max}`;
 }
 
 function growthParams() {
@@ -1603,88 +2184,12 @@ function growthParams() {
   return { strokeW, clearance, maxEdge, cohesion: 0.55 };
 }
 
-function createAdern(p) {
-  const w = p.width;
-  const h = p.height;
-  const maxNodes = 8000;
-  const bounds = { w, h };
-  const lines = buildGrowthLines(w, h);
-
-  function totalNodes() {
-    let n = 0;
-    for (let i = 0; i < lines.length; i++) n += lines[i].nodes.length;
-    return n;
+function drawPreviewStrokeW() {
+  if (state.mode === "lab2" && typeof lab2StrokeWidth === "function") {
+    return lab2StrokeWidth(state.lab2.stroke);
   }
-
-  let frameCount = 0;
-
-  return {
-    update() {
-      const total = totalNodes();
-      if (total >= maxNodes) return;
-      const { strokeW, clearance, maxEdge, cohesion } = growthParams();
-      const factor = clamp(state.speed * 0.6, 0.1, 1.5);
-      differentiateAllLines(lines, clearance, cohesion, factor, bounds, strokeW);
-      applyShapeMemoryLines(lines, 0.06);
-      frameCount++;
-      if (frameCount % 4 === 0) {
-        let splitBudget = GROWTH_MAX_SPLITS_PER_FRAME;
-        for (let i = 0; i < lines.length && splitBudget > 0; i++) {
-          const before = lines[i].nodes.length;
-          lines[i].nodes = growLine(lines[i].nodes, maxEdge, makeGrowthNode, splitBudget);
-          splitBudget -= lines[i].nodes.length - before;
-        }
-      }
-      const crossEvery = total > 4000 ? 10 : 4;
-      if (frameCount % crossEvery === 0) {
-        resolveCrossings(lines, clearance);
-        clampLinesToDisplay(lines, bounds, strokeW);
-      }
-    },
-
-    draw() {
-      p.background(255);
-      const { strokeW } = growthParams();
-      p.noFill();
-      p.stroke(10, 10, 10, 250);
-      p.strokeWeight(strokeW);
-      p.strokeCap(p.ROUND);
-      p.strokeJoin(p.ROUND);
-
-      for (let i = 0; i < lines.length; i++) {
-        const nodes = lines[i].nodes;
-        if (nodes.length < 2) continue;
-        p.beginShape();
-        for (let j = 0; j < nodes.length; j++) p.vertex(nodes[j].x, nodes[j].y);
-        p.endShape(p.CLOSE);
-      }
-
-      p.noStroke();
-      p.fill(255);
-      const dotR = Math.max(2.2, strokeW * 0.22);
-      for (let i = 0; i < lines.length; i++) {
-        const nodes = lines[i].nodes;
-        const step = nodes.length > 500 ? 2 : 1;
-        for (let j = 0; j < nodes.length; j += step) {
-          p.circle(nodes[j].x, nodes[j].y, dotR);
-        }
-      }
-    },
-
-    appendContours(contours) {
-      const safe = sanitizeContours(contours, w, h);
-      const added = contoursToGrowthLines(safe);
-      for (let i = 0; i < added.length; i++) lines.push(added[i]);
-    },
-
-    getLines() {
-      return lines;
-    },
-
-    get strokeW() {
-      return growthParams().strokeW;
-    },
-  };
+  // reactor / lab: pinsel-dicke steuert die zeichen-vorschau
+  return state.brush;
 }
 
 const reactorHelpers = () => ({
@@ -1698,7 +2203,6 @@ const reactorHelpers = () => ({
   pointInPolygon,
 });
 
-
 const labHelpers = () => ({
   state,
   buildGrowthLines,
@@ -1711,12 +2215,22 @@ const labHelpers = () => ({
   sanitizeContours,
 });
 
+const diff3Helpers = () => ({
+  state,
+  clamp,
+});
+
 const FACTORIES = {
-  adern: createAdern,
   reactor: (p) => ReactorGrowthMode.create(p, reactorHelpers()),
   lab: (p) => LabGrowthMode.create(p, labHelpers()),
   lab2: (p) => Lab2GrowthMode.create(p, labHelpers()),
+  diff3d: (p) => Diff3GrowthMode.create(p, diff3Helpers()),
+  dof: (p) => DofGrowthMode.create(p, diff3Helpers()),
 };
+
+function isNodeMode(modeKey) {
+  return modeKey === "diff3d" || modeKey === "dof";
+}
 
 /* ============================================================
    ORCHESTRIERUNG
@@ -1724,9 +2238,11 @@ const FACTORIES = {
 
 async function rebuildSim() {
   if (!p5i) return;
-  if (state.input === "text") updateInputFontSize();
+  if (state.input === "text" && !isNodeMode(state.mode)) updateInputFontSize();
   refreshLab2MaxNodesLabel();
-  refreshSeed(p5i);
+  refreshDiff3MaxNodesLabel();
+  refreshDofMaxNodesLabel();
+  if (!isNodeMode(state.mode)) refreshSeed(p5i);
   if (state.mode === "reactor" && state.reactorFontUrl.trim()) {
     await loadReactorFont(state.reactorFont, state.reactorFontUrl);
   }
@@ -1741,8 +2257,10 @@ function setMode(modeKey) {
   if (MODES[modeKey] && els.desc) els.desc.textContent = MODES[modeKey].desc;
   els.growthModes.forEach((btn) => btn.classList.toggle("is-active", btn.dataset.mode === modeKey));
   document.body.classList.toggle("mode-reactor", modeKey === "reactor");
-  document.body.classList.toggle("mode-lab", modeKey === "lab" || modeKey === "lab2");
+  document.body.classList.toggle("mode-lab", modeKey === "lab" || modeKey === "lab2" || modeKey === "diff3d" || modeKey === "dof");
   document.body.classList.toggle("mode-lab2", modeKey === "lab2");
+  document.body.classList.toggle("mode-diff3d", modeKey === "diff3d");
+  document.body.classList.toggle("mode-dof", modeKey === "dof");
   refreshParamLabels();
   updateInputFontSize();
   rebuildSim();
@@ -1771,13 +2289,26 @@ function exportSVG() {
   let paths = "";
   for (let i = 0; i < lines.length; i++) {
     const nodes = lines[i].nodes;
-    if (nodes.length < 2) continue;
+    if (!nodes || nodes.length < 2) continue;
     let d = `M ${nodes[0].x.toFixed(1)} ${nodes[0].y.toFixed(1)}`;
     for (let j = 1; j < nodes.length; j++) {
       d += ` L ${nodes[j].x.toFixed(1)} ${nodes[j].y.toFixed(1)}`;
     }
     d += " Z";
-    paths += `<path d="${d}" fill="none" stroke="#0a0a0a" stroke-width="${sim.strokeW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>\n`;
+    const holes = lines[i].holes;
+    if (holes) {
+      for (let hi = 0; hi < holes.length; hi++) {
+        const ring = holes[hi];
+        if (!ring || ring.length < 2) continue;
+        d += ` M ${ring[0].x.toFixed(1)} ${ring[0].y.toFixed(1)}`;
+        for (let j = 1; j < ring.length; j++) {
+          d += ` L ${ring[j].x.toFixed(1)} ${ring[j].y.toFixed(1)}`;
+        }
+        d += " Z";
+      }
+    }
+    const evenodd = holes?.length ? ' fill-rule="evenodd"' : "";
+    paths += `<path d="${d}"${evenodd} fill="none" stroke="#0a0a0a" stroke-width="${sim.strokeW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>\n`;
   }
 
   const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n<rect width="${w}" height="${h}" fill="#ffffff"/>\n${paths}</svg>`;
@@ -1960,6 +2491,8 @@ const sketch = (p) => {
   p.draw = () => {
     if (!state.paused && sim && sim.update) sim.update();
     if (sim && sim.draw) sim.draw();
+    if (state.mode === "lab2") refreshLab2MaxNodesLabel();
+    if (state.mode === "diff3d") refreshDiff3MaxNodesLabel();
     // tinte nur sichtbar während des malens — danach nur wachstum
     if (state.input === "draw" && isDrawingStroke && drawG) {
       p.image(drawG, 0, 0);
@@ -1995,13 +2528,14 @@ const sketch = (p) => {
     if (canvasInputBlocked(p)) return false;
     if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return false;
     drawG.stroke(10);
-    drawG.strokeWeight(state.brush);
+    const sw = drawPreviewStrokeW();
+    drawG.strokeWeight(sw);
     drawG.strokeCap(p.ROUND);
     drawG.line(p.pmouseX, p.pmouseY, p.mouseX, p.mouseY);
     if (Math.hypot(p.mouseX - p.pmouseX, p.mouseY - p.pmouseY) < 0.5) {
       drawG.noStroke();
       drawG.fill(10);
-      drawG.circle(p.mouseX, p.mouseY, state.brush);
+      drawG.circle(p.mouseX, p.mouseY, sw);
       drawG.noFill();
       drawG.stroke(10);
     }
@@ -2011,6 +2545,14 @@ const sketch = (p) => {
   p.mousePressed = () => {
     if (canvasInputBlocked(p)) return;
     if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return;
+    if (isNodeMode(state.mode)) {
+      if (sim && sim.addNodeAtScreen) {
+        sim.addNodeAtScreen(p.mouseX, p.mouseY);
+        refreshDiff3MaxNodesLabel();
+        refreshDofMaxNodesLabel();
+      }
+      return;
+    }
     if (state.input === "draw") {
       isDrawingStroke = true;
       captureDrawStrokeBefore(p);
@@ -2108,7 +2650,8 @@ els.clear.addEventListener("click", () => {
 
 els.speed.addEventListener("input", () => {
   state.speed = parseFloat(els.speed.value);
-  els.speedVal.textContent = `${state.speed.toFixed(1)}×`;
+  syncSpeedUI();
+  saveSpeedToStorage();
 });
 
 function refreshParamLabels() {
@@ -2145,7 +2688,7 @@ if (els.reactorFontUrl) {
   });
 }
 
-/* lab2 — differential growth: komplexität + neue node bauen neu auf */
+/* lab2 — differential growth: komplexität + teilungs-abstand bauen neu auf */
 function bindLab2Param(input, valEl, key, fmt, rebuildOnChange) {
   if (!input || !valEl) return;
   input.value = String(state.lab2[key]);
@@ -2181,7 +2724,98 @@ bindLab2Param(els.l2Repulsion, els.l2RepulsionVal, "repulsion", pct, false);
 bindLab2Param(els.l2Push, els.l2PushVal, "push", pct, false);
 bindLab2Param(els.l2Complexity, els.l2ComplexityVal, "complexity", lab2ComplexityFmt, true);
 bindLab2Param(els.l2Split, els.l2SplitVal, "split", lab2SplitFmt, true);
+bindLab2Param(els.l2NodeLimit, els.l2NodeLimitVal, "nodeLimit", lab2NodeLimitFmt, false);
+els.l2NodeLimit?.addEventListener("input", () => refreshLab2MaxNodesLabel());
 refreshLab2MaxNodesLabel();
+
+const diff3ComplexityFmt = (v) => `~${Math.round(10 + v * 90)}`;
+const diff3SplitFmt = (v) => {
+  const stage = getStageRect();
+  const prm = typeof diff3ComputeParams === "function"
+    ? diff3ComputeParams({ ...state.diff3d, split: v }, stage.width || 800, stage.height || 600)
+    : { insertDistance: 5 };
+  return `${Math.round(prm.insertDistance)} px`;
+};
+
+function bindDiff3Param(input, valEl, key, fmt, rebuildOnChange) {
+  if (!input || !valEl) return;
+  input.value = String(state.diff3d[key]);
+  valEl.textContent = fmt(state.diff3d[key]);
+  input.addEventListener("input", () => {
+    state.diff3d[key] = parseFloat(input.value);
+    valEl.textContent = fmt(state.diff3d[key]);
+    if (key === "split" || key === "complexity") {
+      if (els.d3SplitVal && key === "complexity") {
+        els.d3SplitVal.textContent = diff3SplitFmt(state.diff3d.split);
+      }
+      if (els.d3ComplexityVal && key === "split") {
+        els.d3ComplexityVal.textContent = diff3ComplexityFmt(state.diff3d.complexity);
+      }
+    }
+    if (rebuildOnChange && state.mode === "diff3d") rebuildSim();
+  });
+}
+
+bindDiff3Param(els.d3Attraction, els.d3AttractionVal, "attraction", pct, false);
+bindDiff3Param(els.d3Repulsion, els.d3RepulsionVal, "repulsion", pct, false);
+bindDiff3Param(els.d3Depth, els.d3DepthVal, "depth", diff3DepthFmt, false);
+bindDiff3Param(els.d3Link, els.d3LinkVal, "link", diff3LinkFmt, false);
+bindDiff3Param(els.d3Complexity, els.d3ComplexityVal, "complexity", diff3ComplexityFmt, false);
+bindDiff3Param(els.d3Split, els.d3SplitVal, "split", diff3SplitFmt, false);
+bindDiff3Param(els.d3DofFocus, els.d3DofFocusVal, "dofFocus", diff3DofFocusFmt, false);
+bindDiff3Param(els.d3DofBlur, els.d3DofBlurVal, "dofBlur", diff3DofBlurFmt, false);
+bindDiff3Param(els.d3Exposure, els.d3ExposureVal, "exposure", diff3ExposureFmt, false);
+bindDiff3Param(els.d3Tumble, els.d3TumbleVal, "tumble", diff3TumbleFmt, false);
+bindDiff3Param(els.d3NodeLimit, els.d3NodeLimitVal, "nodeLimit", lab2NodeLimitFmt, false);
+
+const dofSplitFmt = (v) => {
+  const stage = getStageRect();
+  const prm = typeof dofComputeParams === "function"
+    ? dofComputeParams({ ...state.dof, split: v }, stage.width || 800, stage.height || 600)
+    : { insertDistance: 5 };
+  return `${Math.round(prm.insertDistance)} px`;
+};
+
+function bindDofParam(input, valEl, key, fmt) {
+  if (!input || !valEl) return;
+  input.value = String(state.dof[key]);
+  valEl.textContent = fmt(state.dof[key]);
+  input.addEventListener("input", () => {
+    state.dof[key] = parseFloat(input.value);
+    valEl.textContent = fmt(state.dof[key]);
+    if (key === "nodeLimit") refreshDofMaxNodesLabel();
+  });
+}
+
+bindDofParam(els.dofLink, els.dofLinkVal, "link", dofLinkFmt);
+bindDofParam(els.dofAttraction, els.dofAttractionVal, "attraction", pct);
+bindDofParam(els.dofRepulsion, els.dofRepulsionVal, "repulsion", pct);
+bindDofParam(els.dofSplit, els.dofSplitVal, "split", dofSplitFmt);
+bindDofParam(els.dofTumble, els.dofTumbleVal, "tumble", dofTumbleFmt);
+bindDofParam(els.dofNodeLimit, els.dofNodeLimitVal, "nodeLimit", lab2NodeLimitFmt);
+
+function refreshDofNodesLabel() {
+  if (els.dofNodes) els.dofNodes.textContent = `nodes: ${state.dof.showNodes ? "an" : "aus"}`;
+}
+if (els.dofNodes) {
+  els.dofNodes.addEventListener("click", () => {
+    state.dof.showNodes = !state.dof.showNodes;
+    refreshDofNodesLabel();
+  });
+  refreshDofNodesLabel();
+}
+
+function bindLabSplit() {
+  if (!els.labSplit || !els.labSplitVal) return;
+  const fmt = typeof labSplitFmt === "function" ? labSplitFmt : (v) => `${Math.round(v * 100)}%`;
+  els.labSplit.value = String(state.lab.split);
+  els.labSplitVal.textContent = fmt(state.lab.split);
+  els.labSplit.addEventListener("input", () => {
+    state.lab.split = parseFloat(els.labSplit.value);
+    els.labSplitVal.textContent = fmt(state.lab.split);
+  });
+}
+bindLabSplit();
 
 function refreshLab2NodesLabel() {
   if (els.l2Nodes) els.l2Nodes.textContent = `nodes: ${state.lab2.showNodes ? "an" : "aus"}`;
@@ -2194,10 +2828,62 @@ if (els.l2Nodes) {
   refreshLab2NodesLabel();
 }
 
+function refreshDiff3NodesLabel() {
+  if (els.d3Nodes) els.d3Nodes.textContent = `nodes: ${state.diff3d.showNodes ? "an" : "aus"}`;
+}
+if (els.d3Nodes) {
+  els.d3Nodes.addEventListener("click", () => {
+    state.diff3d.showNodes = !state.diff3d.showNodes;
+    refreshDiff3NodesLabel();
+  });
+  refreshDiff3NodesLabel();
+}
+
+function refreshLab2LegacyLabel() {
+  if (!els.l2Legacy) return;
+  els.l2Legacy.classList.toggle("is-active", state.lab2.legacy);
+  els.l2Legacy.textContent = state.lab2.legacy
+    ? "klassik aktiv"
+    : "klassik (explosion)";
+}
+
 els.play.addEventListener("click", () => setPaused(!state.paused));
-els.reset.addEventListener("click", () => rebuildSim());
+els.reset.addEventListener("click", () => {
+  if (state.mode === "diff3d") {
+    state.diff3d.graph = null;
+    if (sim && sim.clearGraph) sim.clearGraph();
+    else rebuildSim();
+    refreshDiff3MaxNodesLabel();
+    return;
+  }
+  if (state.mode === "dof") {
+    state.dof.graph = null;
+    if (sim && sim.clearGraph) sim.clearGraph();
+    else rebuildSim();
+    refreshDofMaxNodesLabel();
+    return;
+  }
+  rebuildSim();
+});
+if (els.l2Legacy) {
+  els.l2Legacy.addEventListener("click", () => {
+    state.lab2.legacy = !state.lab2.legacy;
+    refreshLab2LegacyLabel();
+    rebuildSim();
+  });
+  refreshLab2LegacyLabel();
+}
+const MODE_FILE_NAMES = {
+  lab2: "differential-growth",
+  diff3d: "3d-growth",
+  dof: "3d-web",
+  lab: "lab",
+  reactor: "reactor",
+};
+
 els.save.addEventListener("click", () => {
-  if (p5i) p5i.saveCanvas(`weirdgrowth-${state.mode}-${Date.now()}`, "png");
+  const name = MODE_FILE_NAMES[state.mode] || state.mode;
+  if (p5i) p5i.saveCanvas(`weirdgrowth-${name}-${Date.now()}`, "png");
 });
 els.svg.addEventListener("click", exportSVG);
 
@@ -2228,10 +2914,11 @@ window.addEventListener("resize", onMobileSheetLayoutChange);
 onMobileSheetLayoutChange();
 
 /* init */
+loadSpeedFromStorage();
+syncSpeedUI();
 els.aVal.textContent = MODES[state.mode].fmtA(state.a);
 els.bVal.textContent = MODES[state.mode].fmtB(state.b);
 els.cVal.textContent = MODES[state.mode].fmtC(state.c);
-els.speedVal.textContent = `${state.speed.toFixed(1)}×`;
 els.brushVal.textContent = String(state.brush);
 updateInputFontSize();
 if (els.textField) {

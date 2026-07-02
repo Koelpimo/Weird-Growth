@@ -10,29 +10,33 @@ function labClamp(v, lo, hi) {
  * ★ LAB        → geschwindigkeit & teilung
  */
 
+function labSplitDistance(split) {
+  return labClamp(6 + (split ?? 0.5) * 50, 6, 56);
+}
+
+const labSplitFmt = (v) => `${Math.round(labSplitDistance(v))} px`;
+
+const LAB_CFG = {
+  grow: 0.12,
+  splitEvery: 28,
+  maxNodes: 480,
+  maxSplits: 10,
+  showDots: true //oder: false
+};
+
 const LabGrowthMode = {
   desc: "Lab — langsam nach außen wachsen. Code in js/lab-growth.js.",
 
   fmtA: (v) => `${Math.round(6 + v * 14)} px`,
   fmtB: (v) => `${Math.round(14 + v * 36)} px`,
-  fmtC: (v) => `${Math.round(5 + v * 18)} px`,
-
-  LAB: {
-    grow: 0.12,
-    splitEvery: 28,
-    splitMul: 2.2,
-    maxNodes: 480,
-    maxSplits: 10,
-    showDots: false,
-  },
+  fmtC: labSplitFmt,
 
   create(p, helpers) {
-    const { state, buildGrowthLines, contoursToGrowthLines, growthParams, clamp, makeGrowthNode, drawG, sanitizeContours } = helpers;
+    const { state, buildGrowthLines, contoursToGrowthLines, growthParams, clamp, makeGrowthNode, sanitizeContours } = helpers;
     const w = p.width;
     const h = p.height;
     const lines = buildGrowthLines(w, h);
     let frame = 0;
-    const self = this;
 
     function totalNodes() {
       let n = 0;
@@ -42,14 +46,14 @@ const LabGrowthMode = {
 
     return {
       update() {
-        if (totalNodes() >= self.LAB.maxNodes) return;
+        if (totalNodes() >= LAB_CFG.maxNodes) return;
 
         const gp = growthParams();
         const speed = clamp(state.speed, 0.1, 3);
         const pad = gp.strokeW * 0.5 + 4;
 
         stepLab(lines, {
-          grow: self.LAB.grow * speed,
+          grow: LAB_CFG.grow * speed,
           spacing: gp.clearance,
           pad,
           w,
@@ -57,15 +61,15 @@ const LabGrowthMode = {
         });
 
         frame++;
-        if (frame % self.LAB.splitEvery === 0) {
-          const splitAt = gp.maxEdge * self.LAB.splitMul;
-          splitLongEdges(lines, splitAt, makeGrowthNode, totalNodes, self.LAB.maxNodes, self.LAB.maxSplits);
+        if (frame % LAB_CFG.splitEvery === 0) {
+          const splitAt = labSplitDistance(state.lab?.split);
+          splitLongEdges(lines, splitAt, makeGrowthNode, totalNodes, LAB_CFG.maxNodes, LAB_CFG.maxSplits);
         }
       },
 
       draw() {
         p.background(255);
-        drawLab(p, lines, growthParams().strokeW, self.LAB.showDots);
+        drawLab(p, lines, growthParams().strokeW, LAB_CFG.showDots);
       },
 
       appendContours(contours) {
