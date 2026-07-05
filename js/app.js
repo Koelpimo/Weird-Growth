@@ -237,6 +237,27 @@ const STABILITY_MIN_FPS = 18;
 const STABILITY_TRIP_FRAMES = 45; // ~0.75s durchgehend zu langsam
 const STABILITY_WARMUP_FRAMES = 60; // erst nach kurzer aufwärmphase prüfen
 let lowFpsFrames = 0;
+let seedCaretHideTimer = null;
+let seedCaretIdleHidden = false;
+const SEED_CARET_IDLE_MS = 3000;
+
+function clearSeedCaretHideTimer() {
+  if (seedCaretHideTimer) {
+    window.clearTimeout(seedCaretHideTimer);
+    seedCaretHideTimer = null;
+  }
+}
+
+function scheduleSeedCaretHide() {
+  clearSeedCaretHideTimer();
+  seedCaretHideTimer = window.setTimeout(() => {
+    const input = els.textField;
+    if (!input || input.value.length > 0) return;
+    if (document.activeElement !== input) return;
+    seedCaretIdleHidden = true;
+    els.seedCaret?.classList.add("is-off");
+  }, SEED_CARET_IDLE_MS);
+}
 
 function clearCanvas() {
   if (state.input === "draw") {
@@ -2702,19 +2723,33 @@ function updateInputFontSize() {
   updateSeedCaret();
 }
 
-function updateSeedCaret() {
+function updateSeedCaret(forceShow = false) {
   const input = els.textField;
   const caret = els.seedCaret;
+  clearSeedCaretHideTimer();
+
   if (!input || !caret || state.input !== "text") {
+    seedCaretIdleHidden = false;
     if (caret) caret.classList.add("is-off");
     return;
   }
 
   const focused = document.activeElement === input;
   if (!focused) {
+    seedCaretIdleHidden = false;
     caret.classList.add("is-off");
     return;
   }
+
+  const val = input.value;
+  const isEmpty = !val.length;
+
+  if (isEmpty && seedCaretIdleHidden && !forceShow) {
+    caret.classList.add("is-off");
+    return;
+  }
+
+  if (forceShow || !isEmpty) seedCaretIdleHidden = false;
   caret.classList.remove("is-off");
 
   const fontSize = parseFloat(input.style.fontSize) || 88;
@@ -2723,7 +2758,6 @@ function updateSeedCaret() {
   caret.style.width = `${caretW}px`;
   caret.style.height = `${Math.round(lineH)}px`;
 
-  const val = input.value;
   const measureFull = val.length ? val : SEED_TEXT_HINT;
   const pos = val.length ? (input.selectionStart ?? val.length) : 0;
   const before = measureFull.slice(0, pos);
@@ -2736,6 +2770,8 @@ function updateSeedCaret() {
   const inputW = input.offsetWidth;
   const caretLeft = (inputW - textW) / 2 + beforeW;
   caret.style.left = `${caretLeft}px`;
+
+  if (isEmpty) scheduleSeedCaretHide();
 }
 
 function bindSeedTextField() {
@@ -2748,11 +2784,17 @@ function bindSeedTextField() {
     if (state.input === "text" && !currentIs3d()) rebuildSim();
   };
 
-  input.addEventListener("input", sync);
-  input.addEventListener("keydown", (e) => e.stopPropagation());
-  input.addEventListener("keyup", () => updateSeedCaret());
-  input.addEventListener("click", () => updateSeedCaret());
-  input.addEventListener("focus", () => updateSeedCaret());
+  input.addEventListener("input", () => {
+    sync();
+    updateSeedCaret(true);
+  });
+  input.addEventListener("keydown", (e) => {
+    e.stopPropagation();
+    updateSeedCaret(true);
+  });
+  input.addEventListener("keyup", () => updateSeedCaret(true));
+  input.addEventListener("click", () => updateSeedCaret(true));
+  input.addEventListener("focus", () => updateSeedCaret(true));
   input.addEventListener("blur", () => updateSeedCaret());
   document.addEventListener("selectionchange", () => {
     if (document.activeElement === input) updateSeedCaret();

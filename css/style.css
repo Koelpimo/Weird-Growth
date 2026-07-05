@@ -518,6 +518,10 @@ body.ctx-3d .ctl-stroke {
   display: none;
 }
 
+body.ctx-3d .ctl-flat {
+  display: none;
+}
+
 .ctl-link,
 .ctl-tumble {
   display: none;
