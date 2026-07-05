@@ -750,7 +750,9 @@ function measureSeedFontSize(ctx, text, w, h, family, weight) {
   const chars = seedGlyphCount(trimmed);
   let size = Math.min(h * 0.8, w * 0.85);
   ctx.font = reactorFontCss(family, size, weight);
-  const targetFrac = clamp(0.9 / Math.pow(chars, 0.32), 0.2, 0.9);
+  // sanftere verkleinerung: text bleibt bei mehr zeichen deutlich größer,
+  // damit die pfade auch ab ~6 zeichen noch komplex genug sind.
+  const targetFrac = clamp(0.94 / Math.pow(chars, 0.14), 0.66, 0.94);
   const target = w * targetFrac;
   const tw = ctx.measureText(trimmed).width || 1;
   if (tw > target) size *= target / tw;
@@ -2985,7 +2987,7 @@ if (ui.nodes) {
 /* ---- pause ---- */
 if (ui.play) ui.play.addEventListener("click", () => setPaused(!state.paused));
 
-/* ---- neu wachsen ---- */
+/* ---- leeren (aktuelles objekt vom canvas entfernen) ---- */
 if (ui.reset) {
   ui.reset.addEventListener("click", () => {
     if (state.mode === "diff3d") {
@@ -3000,7 +3002,8 @@ if (ui.reset) {
       else rebuildSim();
       return;
     }
-    rebuildSim();
+    if (sim && typeof sim.clearAll === "function") sim.clearAll();
+    else rebuildSim();
   });
 }
 
@@ -3077,7 +3080,7 @@ if (sidePanelEl && typeof ResizeObserver !== "undefined") {
 window.addEventListener("resize", onMobileSheetLayoutChange);
 onMobileSheetLayoutChange();
 
-/* ---- intro: differential growth + zoom während wachstum ---- */
+/* ---- intro: differential growth, dann normaler übergang (überblenden) ---- */
 function runIntro() {
   const intro = document.getElementById("intro");
   if (!intro) {
@@ -3086,6 +3089,7 @@ function runIntro() {
   }
 
   const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let transitioning = false;
   let done = false;
   const wasPaused = state.paused;
   state.paused = true;
@@ -3101,38 +3105,31 @@ function runIntro() {
     }
   };
 
-  const beginFly = () => {
+  // normaler übergang: seite blendet ein, intro blendet aus. kein zoom.
+  const startTransition = () => {
+    if (transitioning) return;
+    transitioning = true;
     document.body.classList.add("entered");
     state.paused = wasPaused;
     setPaused(wasPaused);
-    intro.classList.add("zoom");
+    intro.classList.add("leaving");
+    window.setTimeout(completeIntro, reduce ? 0 : 620);
   };
 
   intro.addEventListener("click", () => {
-    if (done) return;
     if (typeof IntroGrowth !== "undefined") IntroGrowth.skip();
-    else {
-      beginFly();
-      completeIntro();
-    }
+    else startTransition();
   });
 
   if (reduce || typeof IntroGrowth === "undefined") {
-    window.setTimeout(() => {
-      beginFly();
-      completeIntro();
-    }, 280);
+    window.setTimeout(startTransition, 280);
     return;
   }
 
-  IntroGrowth.start(beginFly, completeIntro);
+  IntroGrowth.start(startTransition);
 
   window.setTimeout(() => {
-    if (!done && typeof IntroGrowth !== "undefined") IntroGrowth.skip();
-    else if (!done) {
-      beginFly();
-      completeIntro();
-    }
+    if (!transitioning) startTransition();
   }, 5200);
 }
 

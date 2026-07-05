@@ -1,5 +1,6 @@
 /**
- * Intro — differential growth aus keim-form, zoom rein während es weiter wächst.
+ * Intro — differential growth aus keim-form. wächst weiter, dann normaler
+ * (überblend-)übergang zur seite. kein zoom.
  */
 const IntroGrowth = (function () {
   const SIZE = 340;
@@ -20,21 +21,15 @@ const IntroGrowth = (function () {
   };
 
   const GROW_STEPS = 3;
-  const FLY_START_FRAME = 66;
-  const FLY_FRAMES = 84;
+  const TRANSITION_FRAME = 72;
 
   let p5Inst = null;
   let sim = null;
   let seedOutline = null;
   let frames = 0;
   let phase = "idle";
-  let onFlyStart = null;
-  let onFlyComplete = null;
-  let flyPhase = false;
-  let flyFrame = 0;
-  let flyStarted = false;
-  let flyDone = false;
-  let currentPd = 0;
+  let onReady = null;
+  let readyFired = false;
 
   function clamp(v, lo, hi) {
     return v < lo ? lo : v > hi ? hi : v;
@@ -79,46 +74,10 @@ const IntroGrowth = (function () {
     return [densifyRing(raw, 50)];
   }
 
-  function targetZoom() {
-    const margin = 3.2;
-    return (Math.max(window.innerWidth, window.innerHeight) / SIZE) * margin;
-  }
-
-  function flyEase(t) {
-    return t * t * (3 - 2 * t);
-  }
-
-  function applyDisplayZoom(p, zoom) {
-    const host = document.getElementById("intro-canvas-host");
-    const base = host && host.clientWidth > 0 ? host.clientWidth : SIZE;
-    const dpr = window.devicePixelRatio || 1;
-    const pd = Math.min(16, Math.max(2, Math.ceil(zoom * dpr)));
-    if (pd !== currentPd) {
-      p.pixelDensity(pd);
-      currentPd = pd;
-    }
-    const c = p.canvas;
-    c.style.width = `${base}px`;
-    c.style.height = `${base}px`;
-    if (zoom <= 1.001) {
-      c.style.transform = "";
-    } else {
-      c.style.transform = `scale(${zoom})`;
-    }
-    c.style.transformOrigin = "center center";
-  }
-
-  function beginFly() {
-    if (flyStarted) return;
-    flyStarted = true;
-    flyPhase = true;
-    if (onFlyStart) onFlyStart();
-  }
-
-  function finishFly() {
-    if (flyDone) return;
-    flyDone = true;
-    if (onFlyComplete) onFlyComplete();
+  function fireReady() {
+    if (readyFired) return;
+    readyFired = true;
+    if (onReady) onReady();
   }
 
   function destroySketch() {
@@ -128,31 +87,24 @@ const IntroGrowth = (function () {
     }
     sim = null;
     seedOutline = null;
-    currentPd = 0;
   }
 
-  function start(flyStartCb, flyCompleteCb) {
-    onFlyStart = flyStartCb;
-    onFlyComplete = flyCompleteCb;
+  function start(readyCb) {
+    onReady = readyCb;
     phase = "grow";
     frames = 0;
-    flyPhase = false;
-    flyFrame = 0;
-    flyStarted = false;
-    flyDone = false;
+    readyFired = false;
 
     const host = document.getElementById("intro-canvas-host");
     if (!host || typeof Lab2GrowthMode === "undefined") {
-      if (onFlyStart) onFlyStart();
-      finishFly();
+      fireReady();
       return;
     }
 
     const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
     if (reduce) {
       phase = "done";
-      if (onFlyStart) onFlyStart();
-      finishFly();
+      fireReady();
       return;
     }
 
@@ -164,7 +116,6 @@ const IntroGrowth = (function () {
         const c = p.createCanvas(SIZE, SIZE);
         c.parent(host);
         p.pixelDensity(Math.min(window.devicePixelRatio || 1, 2));
-        currentPd = p.pixelDensity();
         p.noLoop();
         seedOutline = seedContours(p.width, p.height);
         sim = Lab2GrowthMode.create(p, {
@@ -193,25 +144,15 @@ const IntroGrowth = (function () {
           }
           p.pop();
           frames++;
-          applyDisplayZoom(p, 1);
           return;
         }
-
-        if (!flyPhase && frames >= FLY_START_FRAME) beginFly();
-
-        let zoom = 1;
-        if (flyPhase) {
-          flyFrame++;
-          const t = Math.min(1, flyFrame / FLY_FRAMES);
-          zoom = 1 + (targetZoom() - 1) * flyEase(t);
-          if (t >= 1) finishFly();
-        }
-
-        applyDisplayZoom(p, zoom);
 
         for (let i = 0; i < GROW_STEPS; i++) sim.update();
         sim.draw();
         frames++;
+
+        // objekt wächst weiter — nach kurzer zeit den übergang anstoßen
+        if (frames >= TRANSITION_FRAME) fireReady();
       };
     };
 
@@ -219,17 +160,7 @@ const IntroGrowth = (function () {
   }
 
   function skip() {
-    beginFly();
-    flyPhase = true;
-    flyFrame = FLY_FRAMES;
-    if (p5Inst && sim && phase === "grow") {
-      const zoom = targetZoom();
-      applyDisplayZoom(p5Inst, zoom);
-      p5Inst.clear();
-      for (let i = 0; i < GROW_STEPS; i++) sim.update();
-      sim.draw();
-    }
-    finishFly();
+    fireReady();
   }
 
   function teardown() {

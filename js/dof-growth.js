@@ -162,31 +162,9 @@ function dofDrawSphereGuide(p, cam, center, radius) {
     }
   }
 
-  // sichtbare außenkontur — keine achsenkreuzung
+  // nur die sichtbare außenkontur — ein einzelner kreis
   p.stroke(190);
   drawRing(center, axisU, axisV, radius, false);
-
-  // zwei geneigte breitengrade (nur vorderseite), leicht versetzt
-  p.stroke(228);
-  for (const tilt of [-0.62, 0.62]) {
-    const bandNormal = diff3Vec3Norm({
-      x: axisU.x * 0.42 + vpn.x * tilt,
-      y: axisU.y * 0.42 + vpn.y * tilt,
-      z: axisU.z * 0.42 + vpn.z * tilt,
-    });
-    let ringU = diff3Vec3Cross(bandNormal, vpn);
-    if (Math.hypot(ringU.x, ringU.y, ringU.z) < 1e-4) continue;
-    ringU = diff3Vec3Norm(ringU);
-    const ringV = diff3Vec3Norm(diff3Vec3Cross(bandNormal, ringU));
-    const dist = radius * Math.abs(tilt);
-    const ringCenter = {
-      x: center.x + bandNormal.x * dist,
-      y: center.y + bandNormal.y * dist,
-      z: center.z + bandNormal.z * dist,
-    };
-    const ringR = Math.sqrt(Math.max(radius * radius - dist * dist, radius * radius * 0.35));
-    drawRing(ringCenter, ringU, ringV, ringR, true);
-  }
 }
 
 function dofSnapNodesToSphere(nodes, center, radius) {
