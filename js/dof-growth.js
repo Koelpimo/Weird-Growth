@@ -188,7 +188,7 @@ function dofComputeParams(dof, w, h, speed) {
   const center = dofSphereCenter(w, h);
   const radius = dofSphereRadius(w, h);
   const maxNodes = lab2MaxNodes(dof);
-  const tempo = diff3Clamp(speed ?? 1.5, 0.2, 5);
+  const tempo = diff3Clamp(speed ?? 4, 0.2, 8);
   return {
     maxNodes,
     insertDistance: insertArc,
@@ -408,7 +408,7 @@ const DofGrowthMode = {
       if (nodes.length === 0) return;
       c = cfg();
       syncNodeParams(c);
-      const factor = clamp(state.speed, 0.2, 5);
+      const factor = clamp(state.speed, 0.2, 8);
       const center = c.sphereCenter;
       const radius = c.sphereRadius;
       const adj = diff3BuildAdj(edges);

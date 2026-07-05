@@ -66,7 +66,7 @@
     <div class="panel-content">
 
       <section class="panel-block">
-        <h2 class="panel-label" id="ver-section-label">differential growth</h2>
+        <h2 class="panel-label" id="ver-section-label">klassik</h2>
         <div class="btn-grid version-toggle" role="group" aria-label="Version">
           <button type="button" class="panel-btn ver-btn is-active" data-ver="1">version 1</button>
           <button type="button" class="panel-btn ver-btn" data-ver="2">version 2</button>
@@ -75,8 +75,8 @@
 
       <section class="panel-block">
         <label class="control" for="param-speed">
-          <span class="control-head">tempo <output id="val-speed" class="control-val">1.5×</output></span>
-          <input type="range" id="param-speed" min="0.2" max="5" step="0.1" value="1.5">
+          <span class="control-head">tempo <output id="val-speed" class="control-val">4.0×</output></span>
+          <input type="range" id="param-speed" min="0.2" max="8" step="0.1" value="4">
         </label>
         <div class="btn-grid">
           <button type="button" id="btn-nodes" class="panel-btn">nodes: aus</button>
@@ -150,15 +150,15 @@
         <p><b>differential growth</b> startet als geschlossene kontur mit nodes entlang der linie.
         nodes, die zu dicht liegen, stoßen sich ab — die form dehnt sich aus. wo lücken entstehen,
         teilt sich die linie und neue nodes entstehen. so wächst die struktur langsam nach außen,
-        ohne sich beliebig zu überkreuzen (version 1). version 2 (klassik) nutzt ältere physik —
+        ohne sich beliebig zu überkreuzen (version 2). version 1 (klassik) nutzt ältere physik —
         linien können sich überlagern und wirken explosiver.</p>
         <p><b>modi:</b> <code>text</code> · <code>draw</code> · <code>3d</code>. panel rechts:
         tempo, pause, neu wachsen, liniendicke, kraft (anziehung ↔ abstoßung), komplexität, export als svg/png.</p>
-        <p><b>version 1 / 2:</b> in text &amp; draw — differential growth vs. klassik. in 3d:
+        <p><b>version 1 / 2:</b> in text &amp; draw — klassik vs. differential growth. in 3d:
         web (kugel-guide) vs. growth (räumliches diff-growth).</p>
         <p class="modal-sources"><b>quellen &amp; weiterführend:</b></p>
         <ul class="modal-links">
-          <li><a href="https://inconvergent.net/2016/shepherding-random-growth/" target="_blank" rel="noopener noreferrer">inconvergent — shepherding random growth</a> — grundlegende erklärung des algorithmus: zufällige keimform, abstoßung zwischen nodes, wachstum durch splits. basis für version 1.</li>
+          <li><a href="https://inconvergent.net/2016/shepherding-random-growth/" target="_blank" rel="noopener noreferrer">inconvergent — shepherding random growth</a> — grundlegende erklärung des algorithmus: zufällige keimform, abstoßung zwischen nodes, wachstum durch splits. basis für version 2.</li>
           <li><a href="https://typereactor.xyz/" target="_blank" rel="noopener noreferrer">typereactor</a> — inspiration für generative typografie: buchstaben als lebendige, wachsende formen.</li>
           <li><a href="https://www.youtube.com/watch?v=1viK2qKuP-Y" target="_blank" rel="noopener noreferrer">youtube — code tutorial</a> — schritt-für-schritt-implementierung von differential growth in code (p5.js / processing).</li>
         </ul>
@@ -167,11 +167,11 @@
   </div>
 
   <script src="js/lab-growth.js?v=9"></script>
-  <script src="js/lab2-growth.js?v=29"></script>
+  <script src="js/lab2-growth.js?v=30"></script>
   <script src="js/intro-growth.js?v=11"></script>
-  <script src="js/diff3d-growth.js?v=7"></script>
-  <script src="js/dof-growth.js?v=10"></script>
+  <script src="js/diff3d-growth.js?v=8"></script>
+  <script src="js/dof-growth.js?v=11"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=222"></script>
+  <script src="js/app.js?v=224"></script>
 </body>
 </html>

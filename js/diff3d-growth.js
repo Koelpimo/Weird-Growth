@@ -546,7 +546,7 @@ const Diff3GrowthMode = {
       if (nodes.length === 0) return;
       c = cfg();
       syncNodeParams(c);
-      const factor = clamp(state.speed, 0.2, 5);
+      const factor = clamp(state.speed, 0.2, 8);
       const adj = diff3BuildAdj(edges);
       const cell = c.separationDistance * 0.85;
       const grid = new Map();

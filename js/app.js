@@ -96,10 +96,10 @@ const els = {
 const state = {
   mode: "lab2",
   input: "text", // "text" | "draw"
-  flatVersion: 1, // 1 = differential growth, 2 = klassik (explosion)
+  flatVersion: 1, // 1 = klassik (explosion), 2 = differential growth
   threeVersion: 1, // 1 = 3d web (dof), 2 = 3d growth (diff3d)
   paused: false,
-  speed: 1.5,
+  speed: 4,
   a: 0.5, // liniendicke
   b: 0.5, // abstand
   c: 0.5, // teilung
@@ -118,7 +118,7 @@ const state = {
     complexity: 0.11, // ~20 start-knoten
     nodeLimit: 0.2, // ~4000 nodes
     showNodes: false,
-    legacy: false, // alte "explosions"-version (linien überschneiden sich)
+    legacy: true, // version 1 = klassik; version 2 = differential growth
   },
   lab: {
     split: 0.5, // ~31 px teilungs-abstand
@@ -168,7 +168,7 @@ function loadSpeedFromStorage() {
     const raw = localStorage.getItem(STORAGE_KEY_SPEED);
     if (raw == null) return;
     const v = parseFloat(raw);
-    if (Number.isFinite(v)) state.speed = clamp(v, 0.2, 5);
+    if (Number.isFinite(v)) state.speed = clamp(v, 0.2, 8);
   } catch (err) {
     /* ignore */
   }
@@ -2897,11 +2897,13 @@ function syncForceUI() {
 function syncVersionUI() {
   const is3d = currentIs3d();
   if (ui.verSectionLabel) {
-    ui.verSectionLabel.textContent = is3d ? "3d growth" : "differential growth";
+    ui.verSectionLabel.textContent = is3d
+      ? "3d growth"
+      : (state.lab2.legacy ? "klassik" : "differential growth");
   }
   let activeVer;
   if (is3d) activeVer = state.mode === "dof" ? 1 : 2;
-  else activeVer = state.lab2.legacy ? 2 : 1;
+  else activeVer = state.lab2.legacy ? 1 : 2;
   ui.verBtns.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.ver) === activeVer));
   ui.navTabs.forEach((b) => {
     const nav = b.dataset.nav;
@@ -2945,7 +2947,7 @@ ui.navTabs.forEach((btn) => {
       setMode(state.threeVersion === 1 ? "dof" : "diff3d");
     } else {
       if (currentIs3d()) setMode("lab2");
-      state.lab2.legacy = state.flatVersion === 2;
+      state.lab2.legacy = state.flatVersion === 1;
       setInput(nav);
       syncVersionUI();
     }
@@ -2961,7 +2963,7 @@ ui.verBtns.forEach((btn) => {
       setMode(ver === 1 ? "dof" : "diff3d");
     } else {
       state.flatVersion = ver;
-      state.lab2.legacy = ver === 2;
+      state.lab2.legacy = ver === 1;
       syncVersionUI();
       rebuildSim();
     }

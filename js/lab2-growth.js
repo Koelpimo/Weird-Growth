@@ -676,7 +676,7 @@ const Lab2GrowthMode = {
       cfg = lab2Cfg();
       syncNodeParams(cfg);
       const legacy = !!(state.lab2 && state.lab2.legacy);
-      const factor = clamp(state.speed, 0.2, 5);
+      const factor = clamp(state.speed, 0.2, 8);
       const bounds = { w, h, sepDist: cfg.separationDistance };
 
       quadtree.clear();

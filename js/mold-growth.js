@@ -342,7 +342,7 @@ const MoldGrowthMode = {
       update() {
         if (!contours.length) return;
         prm = moldParams(state.mold, w, h);
-        const loops = Math.max(1, Math.round(clamp(state.speed, 0.2, 5)));
+        const loops = Math.max(1, Math.round(clamp(state.speed, 0.2, 8)));
         for (let f = 0; f < loops; f++) frameStep();
       },
 
