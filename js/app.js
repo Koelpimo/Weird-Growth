@@ -115,7 +115,7 @@ const state = {
     repulsion: 0.75,
     push: 0.5,
     split: 0.31,
-    complexity: 0.11, // ~20 start-knoten
+    complexity: 0, // ~10 start-knoten
     nodeLimit: 0.2, // ~4000 nodes
     showNodes: false,
     legacy: true, // version 1 = klassik; version 2 = differential growth
@@ -130,7 +130,7 @@ const state = {
     depth: 0.45,
     link: 0.45,
     split: 0.31,
-    complexity: 0.11,
+    complexity: 0,
     nodeLimit: 0.2,
     dofFocus: 0.5,
     dofBlur: 0.5,
@@ -148,7 +148,7 @@ const state = {
     depth: 0.45,
     link: 0.4,
     split: 0.31,
-    complexity: 0.11,
+    complexity: 0,
     nodeLimit: 0.2,
     tumble: 0.4,
     graph: null,
