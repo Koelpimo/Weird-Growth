@@ -110,9 +110,9 @@ const state = {
   reactorFontWeight: "700",
   lab2: {
     stroke: 0.1, // ~2 px
-    force: 0.5,
-    attraction: 0.5,
-    repulsion: 0.5,
+    force: 0.75, // 75% abstoßung
+    attraction: 0.25,
+    repulsion: 0.75,
     push: 0.5,
     split: 0.31,
     complexity: 0.11, // ~20 start-knoten
@@ -124,9 +124,9 @@ const state = {
     split: 0.5, // ~31 px teilungs-abstand
   },
   diff3d: {
-    force: 0.5,
-    attraction: 0.5,
-    repulsion: 0.5,
+    force: 0.75,
+    attraction: 0.25,
+    repulsion: 0.75,
     depth: 0.45,
     link: 0.45,
     split: 0.31,
@@ -142,9 +142,9 @@ const state = {
     showNodes: false,
   },
   dof: {
-    force: 0.5,
-    attraction: 0.5,
-    repulsion: 0.5,
+    force: 0.75,
+    attraction: 0.25,
+    repulsion: 0.75,
     depth: 0.45,
     link: 0.4,
     split: 0.31,
@@ -765,13 +765,14 @@ function measureSeedFontSize(ctx, text, w, h, family, weight) {
 }
 
 function measureHintFontSize(ctx, w, h, family, weight) {
-  let size = Math.min(h * 0.24, w * 0.14, 132);
-  size = Math.max(size, 56);
+  // kleiner leerer zustand: dezenter cursor + kompaktes feld (hint selbst ist css)
+  let size = Math.min(h * 0.09, w * 0.06, 44);
+  size = Math.max(size, 24);
   ctx.font = reactorFontCss(family, size, weight);
   const tw = ctx.measureText(SEED_TEXT_HINT).width || 1;
   const maxW = w * 0.82;
   if (tw > maxW) size *= maxW / tw;
-  return Math.max(48, size);
+  return Math.max(22, size);
 }
 
 function applySeedFieldFont(el, size, family, weight, isReactor) {
@@ -2672,7 +2673,8 @@ function updateInputFontSize() {
   applySeedFieldFont(els.sizer, size, fam, wt, isReactor);
   applySeedFieldFont(els.measureBefore, size, fam, wt, isReactor);
   applySeedFieldFont(els.textField, size, fam, wt, isReactor);
-  if (els.seedHint) applySeedFieldFont(els.seedHint, size, fam, wt, isReactor);
+  // hint (type here) NICHT mit der seed-schrift überschreiben — styling kommt aus css
+  // (klein, hellgrau, helvetica)
 
   const w = els.sizer.offsetWidth;
   const inputW = Math.min(Math.max(w + 8, size * 0.55), stage.width * 0.95);

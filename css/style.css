@@ -86,7 +86,8 @@ input {
 
 .nav {
   position: absolute;
-  left: 50%;
+  /* zentriert über dem canvas-bereich (viewport minus panel), nicht der ganzen topbar */
+  left: calc(50% - var(--panel-w) / 2);
   top: 50%;
   transform: translate(-50%, -50%);
   display: flex;
@@ -251,14 +252,15 @@ body:not(.entered) .text-layer {
   display: flex;
   align-items: center;
   justify-content: center;
-  font-family: var(--seed-font);
-  font-weight: 700;
+  font-family: var(--font-ui);
+  font-size: 1.7rem;
+  font-weight: 500;
   line-height: 1.2;
-  letter-spacing: 0;
-  text-transform: lowercase;
+  letter-spacing: 0.02em;
+  text-transform: none;
   text-align: center;
   white-space: pre;
-  color: var(--muted);
+  color: #cfcfcf;
   pointer-events: none;
   user-select: none;
 }
@@ -706,7 +708,7 @@ body.is-draw.ctx-flat .ctl-draw {
   padding: 0;
   border: none;
   font-family: var(--font-display);
-  font-size: clamp(2.4rem, 9vw, 4.2rem);
+  font-size: clamp(3.4rem, 13vw, 6.4rem);
   font-weight: 700;
   line-height: 1;
   letter-spacing: 0.04em;
