@@ -3,12 +3,17 @@
    verschiedene generative Ansätze. Aktuell: Adern (differential line growth). */
 
 const host = document.getElementById("canvas-host");
+const SEED_TEXT_HINT = "type here";
 
 const els = {
   inputTabs: Array.from(document.querySelectorAll(".mode-tab")),
   growthModes: Array.from(document.querySelectorAll(".growth-mode:not(:disabled)")),
   textField: document.getElementById("seed-text"),
   sizer: document.getElementById("seed-sizer"),
+  measureBefore: document.getElementById("seed-measure-before"),
+  seedHint: document.getElementById("seed-hint"),
+  seedCaret: document.getElementById("seed-caret"),
+  seedLine: document.getElementById("seed-line"),
   desc: document.getElementById("mode-desc"),
   play: document.getElementById("btn-play"),
   reset: document.getElementById("btn-reset"),
@@ -91,18 +96,21 @@ const els = {
 const state = {
   mode: "lab2",
   input: "text", // "text" | "draw"
+  flatVersion: 1, // 1 = differential growth, 2 = klassik (explosion)
+  threeVersion: 1, // 1 = 3d web (dof), 2 = 3d growth (diff3d)
   paused: false,
   speed: 1.5,
   a: 0.5, // liniendicke
   b: 0.5, // abstand
   c: 0.5, // teilung
   brush: 24,
-  text: "TYPE HERE",
+  text: "",
   reactorFont: "Helvetica Neue",
   reactorFontUrl: "",
   reactorFontWeight: "700",
   lab2: {
     stroke: 0.1, // ~2 px
+    force: 0.5,
     attraction: 0.5,
     repulsion: 0.5,
     push: 0.5,
@@ -116,6 +124,7 @@ const state = {
     split: 0.5, // ~31 px teilungs-abstand
   },
   diff3d: {
+    force: 0.5,
     attraction: 0.5,
     repulsion: 0.5,
     depth: 0.45,
@@ -133,6 +142,7 @@ const state = {
     showNodes: false,
   },
   dof: {
+    force: 0.5,
     attraction: 0.5,
     repulsion: 0.5,
     depth: 0.45,
@@ -147,7 +157,10 @@ const state = {
 };
 
 const SCALE = 4; // raster der maske (px pro zelle)
-const FONT_STACK = '"Helvetica Neue", Helvetica, Arial, sans-serif'; // identisch zum eingabefeld
+const DISPLAY_FONT = "Astloch";
+const UI_FONT = "Helvetica Neue";
+const UI_FONT_STACK = `"${UI_FONT}", Helvetica, Arial, sans-serif`;
+const FONT_STACK = `"${DISPLAY_FONT}", Georgia, "Times New Roman", serif`;
 const STORAGE_KEY_SPEED = "weirdgrowth-speed";
 
 function loadSpeedFromStorage() {
@@ -218,6 +231,27 @@ let isDrawingStroke = false;
 let p5i = null;
 let sim = null;
 
+/* stabilitäts-wächter: bei anhaltend niedriger framerate wird das aktuelle
+   objekt automatisch vom canvas gelöscht (schutz vor einfrieren). */
+const STABILITY_MIN_FPS = 18;
+const STABILITY_TRIP_FRAMES = 45; // ~0.75s durchgehend zu langsam
+const STABILITY_WARMUP_FRAMES = 60; // erst nach kurzer aufwärmphase prüfen
+let lowFpsFrames = 0;
+
+function emergencyClear() {
+  if (state.input === "draw") {
+    if (drawG) drawG.clear();
+    if (drawSeedG) drawSeedG.clear();
+    drawStrokeBefore = null;
+    drewThisStroke = false;
+    isDrawingStroke = false;
+  }
+  if (sim && typeof sim.clearAll === "function") sim.clearAll();
+  else if (sim && typeof sim.clearGraph === "function") sim.clearGraph();
+  else rebuildSim();
+  lowFpsFrames = 0;
+}
+
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
 }
@@ -230,7 +264,7 @@ function seedTextSize(gfx, txt, w, h) {
   const tmp = document.createElement("canvas");
   const ctx = tmp.getContext("2d");
   if (!ctx) return Math.max(22, Math.min(h * 0.28, 200));
-  const fam = state.mode === "reactor" ? state.reactorFont : "Helvetica Neue";
+  const fam = state.mode === "reactor" ? state.reactorFont : DISPLAY_FONT;
   const wt = state.mode === "reactor" ? state.reactorFontWeight : "700";
   return measureSeedFontSize(ctx, txt, w, h, fam, wt);
 }
@@ -239,7 +273,7 @@ function drawSeedText(gfx, txt, w, h) {
   const layout = getGrowthLayout(w, h);
   const tmp = document.createElement("canvas");
   const ctx = tmp.getContext("2d");
-  const fam = state.mode === "reactor" ? state.reactorFont : "Helvetica Neue";
+  const fam = state.mode === "reactor" ? state.reactorFont : DISPLAY_FONT;
   const wt = state.mode === "reactor" ? state.reactorFontWeight : "700";
   const line = ctx ? seedLineMetrics(ctx, txt, layout, fam, wt) : null;
   gfx.push();
@@ -694,7 +728,7 @@ async function loadReactorFont(family, url) {
 }
 
 function reactorFontCss(family, size, weight) {
-  const fam = (family || "Helvetica Neue").trim();
+  const fam = (family || UI_FONT).trim();
   const quoted = fam.includes(" ") ? `"${fam}"` : fam;
   return `${weight || "700"} ${size}px ${quoted}, Helvetica, Arial, sans-serif`;
 }
@@ -726,6 +760,30 @@ function measureSeedFontSize(ctx, text, w, h, family, weight) {
   const maxH = h - vPad * 2;
   if (glyph.height > maxH) size *= maxH / glyph.height;
   return Math.max(22, size);
+}
+
+function measureHintFontSize(ctx, w, h, family, weight) {
+  let size = Math.min(h * 0.24, w * 0.14, 132);
+  size = Math.max(size, 56);
+  ctx.font = reactorFontCss(family, size, weight);
+  const tw = ctx.measureText(SEED_TEXT_HINT).width || 1;
+  const maxW = w * 0.82;
+  if (tw > maxW) size *= maxW / tw;
+  return Math.max(48, size);
+}
+
+function applySeedFieldFont(el, size, family, weight, isReactor) {
+  if (!el) return;
+  el.style.fontSize = `${size}px`;
+  if (isReactor) {
+    const fam = family.includes(" ") ? `"${family}"` : family;
+    const fontCss = `${weight} ${size}px ${fam}, Helvetica, Arial, sans-serif`;
+    el.style.fontFamily = fontCss;
+    el.style.fontWeight = weight;
+  } else {
+    el.style.fontFamily = "";
+    el.style.fontWeight = "700";
+  }
 }
 
 function makeBinaryFromCanvas(ctx, w, h, threshold = 128) {
@@ -2112,7 +2170,7 @@ function buildLab2Contours(w, h) {
       txt,
       w,
       h,
-      state.reactorFont || "Helvetica Neue",
+      state.reactorFont || DISPLAY_FONT,
       state.reactorFontWeight || "700",
       seedSpacing
     );
@@ -2254,14 +2312,11 @@ function setMode(modeKey) {
   if (!FACTORIES[modeKey]) return;
   state.mode = modeKey;
   document.body.dataset.mode = modeKey;
-  if (MODES[modeKey] && els.desc) els.desc.textContent = MODES[modeKey].desc;
-  els.growthModes.forEach((btn) => btn.classList.toggle("is-active", btn.dataset.mode === modeKey));
-  document.body.classList.toggle("mode-reactor", modeKey === "reactor");
-  document.body.classList.toggle("mode-lab", modeKey === "lab" || modeKey === "lab2" || modeKey === "diff3d" || modeKey === "dof");
-  document.body.classList.toggle("mode-lab2", modeKey === "lab2");
-  document.body.classList.toggle("mode-diff3d", modeKey === "diff3d");
-  document.body.classList.toggle("mode-dof", modeKey === "dof");
-  refreshParamLabels();
+  const is3d = modeKey === "diff3d" || modeKey === "dof";
+  document.body.dataset.ctx = is3d ? "3d" : "flat";
+  document.body.classList.toggle("ctx-3d", is3d);
+  document.body.classList.toggle("ctx-flat", !is3d);
+  if (typeof syncPanelForMode === "function") syncPanelForMode();
   updateInputFontSize();
   rebuildSim();
 }
@@ -2460,16 +2515,8 @@ function createGlassSurface(el, glCanvas) {
   };
 }
 
-const glassSurfaces = [
-  createGlassSurface(
-    document.querySelector(".side-panel"),
-    document.getElementById("panel-glass-canvas")
-  ),
-  createGlassSurface(
-    document.querySelector(".input-modes"),
-    document.getElementById("topbar-glass-canvas")
-  ),
-].filter(Boolean);
+// glasoptik entfernt — panel/topbar sind solide flächen
+const glassSurfaces = [];
 
 const sketch = (p) => {
   p5i = p;
@@ -2489,7 +2536,20 @@ const sketch = (p) => {
   };
 
   p.draw = () => {
-    if (!state.paused && sim && sim.update) sim.update();
+    if (!state.paused && sim && sim.update) {
+      sim.update();
+      // stabilitäts-wächter — nur bei aktivem, laufendem wachstum
+      if (document.body.classList.contains("entered") && p.frameCount > STABILITY_WARMUP_FRAMES) {
+        const fps = p.frameRate();
+        if (fps > 0 && fps < STABILITY_MIN_FPS) {
+          lowFpsFrames++;
+          if (lowFpsFrames >= STABILITY_TRIP_FRAMES) emergencyClear();
+        } else if (lowFpsFrames > 0) {
+          lowFpsFrames -= 2;
+          if (lowFpsFrames < 0) lowFpsFrames = 0;
+        }
+      }
+    }
     if (sim && sim.draw) sim.draw();
     if (state.mode === "lab2") refreshLab2MaxNodesLabel();
     if (state.mode === "diff3d") refreshDiff3MaxNodesLabel();
@@ -2589,305 +2649,409 @@ function updateInputFontSize() {
   syncMobileSheetHeight();
   const stage = getStageRect();
   const layout = getGrowthLayout(stage.width, stage.height);
-  const txt = els.textField.value || els.textField.placeholder || " ";
+  const val = els.textField.value;
+  const showingHint = !val.length;
+  const measureTxt = showingHint ? SEED_TEXT_HINT : val;
 
   const tmp = document.createElement("canvas");
   const ctx = tmp.getContext("2d");
-  const fam = state.mode === "reactor" ? state.reactorFont : "Helvetica Neue";
+  const fam = state.mode === "reactor" ? state.reactorFont : DISPLAY_FONT;
   const wt = state.mode === "reactor" ? state.reactorFontWeight : "700";
+  const isReactor = state.mode === "reactor";
   const size = ctx
-    ? measureSeedFontSize(
-      ctx, txt.trim() || "A", layout.measureW, layout.measureH, fam, wt
-    )
+    ? (showingHint
+      ? measureHintFontSize(ctx, layout.measureW, layout.measureH, fam, wt)
+      : measureSeedFontSize(
+        ctx, val.trim() || "A", layout.measureW, layout.measureH, fam, wt
+      ))
     : Math.min(layout.measureH * 0.5, layout.measureW * 0.5);
 
-  els.sizer.textContent = txt;
+  els.sizer.textContent = measureTxt;
+  applySeedFieldFont(els.sizer, size, fam, wt, isReactor);
+  applySeedFieldFont(els.measureBefore, size, fam, wt, isReactor);
+  applySeedFieldFont(els.textField, size, fam, wt, isReactor);
+  if (els.seedHint) applySeedFieldFont(els.seedHint, size, fam, wt, isReactor);
 
-  els.textField.style.fontSize = `${size}px`;
-  els.sizer.style.fontSize = `${size}px`;
-  if (state.mode === "reactor") {
-    const fam = state.reactorFont.includes(" ") ? `"${state.reactorFont}"` : state.reactorFont;
-    const fontCss = `${state.reactorFontWeight} ${size}px ${fam}, Helvetica, Arial, sans-serif`;
-    els.sizer.style.fontFamily = fontCss;
-    els.textField.style.fontFamily = fontCss;
-    els.textField.style.fontWeight = state.reactorFontWeight;
-  } else {
-    els.sizer.style.fontFamily = "";
-    els.textField.style.fontFamily = "";
-    els.textField.style.fontWeight = "700";
-  }
   const w = els.sizer.offsetWidth;
-  els.textField.style.width = `${Math.min(w + 6, stage.width * 0.95)}px`;
+  const inputW = Math.min(Math.max(w + 8, size * 0.55), stage.width * 0.95);
+  els.textField.style.width = `${inputW}px`;
+  if (els.seedHint) {
+    els.seedHint.hidden = !showingHint;
+    els.seedHint.style.width = `${inputW}px`;
+  }
+
+  updateSeedCaret();
+}
+
+function updateSeedCaret() {
+  const input = els.textField;
+  const caret = els.seedCaret;
+  if (!input || !caret || state.input !== "text") {
+    if (caret) caret.classList.add("is-off");
+    return;
+  }
+
+  const focused = document.activeElement === input;
+  if (!focused) {
+    caret.classList.add("is-off");
+    return;
+  }
+  caret.classList.remove("is-off");
+
+  const fontSize = parseFloat(input.style.fontSize) || 88;
+  const lineH = fontSize * 1.2;
+  const caretW = 1;
+  caret.style.width = `${caretW}px`;
+  caret.style.height = `${Math.round(lineH)}px`;
+
+  const val = input.value;
+  const measureFull = val.length ? val : SEED_TEXT_HINT;
+  const pos = val.length ? (input.selectionStart ?? val.length) : 0;
+  const before = measureFull.slice(0, pos);
+
+  if (els.measureBefore) els.measureBefore.textContent = before || "\u200b";
+  els.sizer.textContent = measureFull;
+
+  const textW = els.sizer.offsetWidth;
+  const beforeW = els.measureBefore ? els.measureBefore.offsetWidth : 0;
+  const inputW = input.offsetWidth;
+  const caretLeft = (inputW - textW) / 2 + beforeW;
+  caret.style.left = `${caretLeft}px`;
+}
+
+function bindSeedTextField() {
+  const input = ui.textField || els.textField;
+  if (!input) return;
+
+  const sync = () => {
+    state.text = input.value;
+    updateInputFontSize();
+    if (state.input === "text" && !currentIs3d()) rebuildSim();
+  };
+
+  input.addEventListener("input", sync);
+  input.addEventListener("keydown", (e) => e.stopPropagation());
+  input.addEventListener("keyup", () => updateSeedCaret());
+  input.addEventListener("click", () => updateSeedCaret());
+  input.addEventListener("focus", () => updateSeedCaret());
+  input.addEventListener("blur", () => updateSeedCaret());
+  document.addEventListener("selectionchange", () => {
+    if (document.activeElement === input) updateSeedCaret();
+  });
 }
 
 bindCanvasPointerGuards();
 
-els.inputTabs.forEach((btn) => btn.addEventListener("click", () => setInput(btn.dataset.input)));
-els.growthModes.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
+/* ============================================================
+   NEUES UI — topbar-nav, version 1/2, einheitliche parameter
+   ============================================================ */
 
-if (els.textField) {
-  els.textField.addEventListener("input", () => {
-    state.text = els.textField.value;
-    updateInputFontSize();
-    if (state.input === "text") rebuildSim();
-  });
-  els.textField.addEventListener("keydown", (e) => e.stopPropagation());
-}
-
-els.brush.addEventListener("input", () => {
-  state.brush = parseInt(els.brush.value, 10);
-  els.brushVal.textContent = String(state.brush);
-});
-
-els.clear.addEventListener("click", () => {
-  if (drawG) drawG.clear();
-  if (drawSeedG) drawSeedG.clear();
-  drawStrokeBefore = null;
-  drewThisStroke = false;
-  isDrawingStroke = false;
-  rebuildSim();
-});
-
-els.speed.addEventListener("input", () => {
-  state.speed = parseFloat(els.speed.value);
-  syncSpeedUI();
-  saveSpeedToStorage();
-});
-
-function refreshParamLabels() {
-  if (!MODES[state.mode]) return;
-  els.aVal.textContent = MODES[state.mode].fmtA(state.a);
-  els.bVal.textContent = MODES[state.mode].fmtB(state.b);
-  els.cVal.textContent = MODES[state.mode].fmtC(state.c);
-}
-
-function bindParam(input, valEl, key, fmtKey) {
-  input.addEventListener("input", () => {
-    state[key] = parseFloat(input.value);
-    valEl.textContent = MODES[state.mode][fmtKey](state[key]);
-  });
-}
-
-bindParam(els.a, els.aVal, "a", "fmtA");
-bindParam(els.b, els.bVal, "b", "fmtB");
-bindParam(els.c, els.cVal, "c", "fmtC");
-
-if (els.reactorFont) {
-  els.reactorFont.value = state.reactorFont;
-  els.reactorFont.addEventListener("input", () => {
-    state.reactorFont = els.reactorFont.value.trim() || "Helvetica Neue";
-    updateInputFontSize();
-    if (state.mode === "reactor") rebuildSim();
-  });
-}
-if (els.reactorFontUrl) {
-  els.reactorFontUrl.value = state.reactorFontUrl;
-  els.reactorFontUrl.addEventListener("change", async () => {
-    state.reactorFontUrl = els.reactorFontUrl.value.trim();
-    if (state.mode === "reactor") await rebuildSim();
-  });
-}
-
-/* lab2 — differential growth: komplexität + teilungs-abstand bauen neu auf */
-function bindLab2Param(input, valEl, key, fmt, rebuildOnChange) {
-  if (!input || !valEl) return;
-  input.value = String(state.lab2[key]);
-  valEl.textContent = fmt(state.lab2[key]);
-  input.addEventListener("input", () => {
-    state.lab2[key] = parseFloat(input.value);
-    valEl.textContent = fmt(state.lab2[key]);
-    if (key === "split" || key === "complexity") {
-      if (els.l2SplitVal && key === "complexity") {
-        els.l2SplitVal.textContent = lab2SplitFmt(state.lab2.split);
-      }
-      if (els.l2ComplexityVal && key === "split") {
-        els.l2ComplexityVal.textContent = lab2ComplexityFmt(state.lab2.complexity);
-      }
-    }
-    if (rebuildOnChange && state.mode === "lab2") rebuildSim();
-  });
-}
-
-const pct = (v) => `${Math.round(v * 100)}%`;
-const lab2ComplexityFmt = (v) => `~${Math.round(10 + v * 90)}`;
-const lab2SplitFmt = (v) => {
-  const stage = getStageRect();
-  const prm = typeof lab2ComputeParams === "function"
-    ? lab2ComputeParams({ ...state.lab2, split: v }, stage.width || 800, stage.height || 600)
-    : { insertDistance: 5 };
-  return `${Math.round(prm.insertDistance)} px`;
+const ui = {
+  navTabs: Array.from(document.querySelectorAll(".nav-tab")),
+  verBtns: Array.from(document.querySelectorAll(".ver-btn")),
+  verSectionLabel: document.getElementById("ver-section-label"),
+  speed: document.getElementById("param-speed"),
+  speedVal: document.getElementById("val-speed"),
+  nodes: document.getElementById("btn-nodes"),
+  play: document.getElementById("btn-play"),
+  reset: document.getElementById("btn-reset"),
+  clear: document.getElementById("btn-clear"),
+  svg: document.getElementById("btn-svg"),
+  save: document.getElementById("btn-save"),
+  info: document.getElementById("btn-info"),
+  infoClose: document.getElementById("btn-info-close"),
+  infoModal: document.getElementById("info-modal"),
+  textField: document.getElementById("seed-text"),
 };
 
-bindLab2Param(els.l2Stroke, els.l2StrokeVal, "stroke", lab2StrokeFmt, false);
-bindLab2Param(els.l2Attraction, els.l2AttractionVal, "attraction", pct, false);
-bindLab2Param(els.l2Repulsion, els.l2RepulsionVal, "repulsion", pct, false);
-bindLab2Param(els.l2Push, els.l2PushVal, "push", pct, false);
-bindLab2Param(els.l2Complexity, els.l2ComplexityVal, "complexity", lab2ComplexityFmt, true);
-bindLab2Param(els.l2Split, els.l2SplitVal, "split", lab2SplitFmt, true);
-bindLab2Param(els.l2NodeLimit, els.l2NodeLimitVal, "nodeLimit", lab2NodeLimitFmt, false);
-els.l2NodeLimit?.addEventListener("input", () => refreshLab2MaxNodesLabel());
-refreshLab2MaxNodesLabel();
-
-const diff3ComplexityFmt = (v) => `~${Math.round(10 + v * 90)}`;
-const diff3SplitFmt = (v) => {
-  const stage = getStageRect();
-  const prm = typeof diff3ComputeParams === "function"
-    ? diff3ComputeParams({ ...state.diff3d, split: v }, stage.width || 800, stage.height || 600)
-    : { insertDistance: 5 };
-  return `${Math.round(prm.insertDistance)} px`;
-};
-
-function bindDiff3Param(input, valEl, key, fmt, rebuildOnChange) {
-  if (!input || !valEl) return;
-  input.value = String(state.diff3d[key]);
-  valEl.textContent = fmt(state.diff3d[key]);
-  input.addEventListener("input", () => {
-    state.diff3d[key] = parseFloat(input.value);
-    valEl.textContent = fmt(state.diff3d[key]);
-    if (key === "split" || key === "complexity") {
-      if (els.d3SplitVal && key === "complexity") {
-        els.d3SplitVal.textContent = diff3SplitFmt(state.diff3d.split);
-      }
-      if (els.d3ComplexityVal && key === "split") {
-        els.d3ComplexityVal.textContent = diff3ComplexityFmt(state.diff3d.complexity);
-      }
-    }
-    if (rebuildOnChange && state.mode === "diff3d") rebuildSim();
-  });
-}
-
-bindDiff3Param(els.d3Attraction, els.d3AttractionVal, "attraction", pct, false);
-bindDiff3Param(els.d3Repulsion, els.d3RepulsionVal, "repulsion", pct, false);
-bindDiff3Param(els.d3Depth, els.d3DepthVal, "depth", diff3DepthFmt, false);
-bindDiff3Param(els.d3Link, els.d3LinkVal, "link", diff3LinkFmt, false);
-bindDiff3Param(els.d3Complexity, els.d3ComplexityVal, "complexity", diff3ComplexityFmt, false);
-bindDiff3Param(els.d3Split, els.d3SplitVal, "split", diff3SplitFmt, false);
-bindDiff3Param(els.d3DofFocus, els.d3DofFocusVal, "dofFocus", diff3DofFocusFmt, false);
-bindDiff3Param(els.d3DofBlur, els.d3DofBlurVal, "dofBlur", diff3DofBlurFmt, false);
-bindDiff3Param(els.d3Exposure, els.d3ExposureVal, "exposure", diff3ExposureFmt, false);
-bindDiff3Param(els.d3Tumble, els.d3TumbleVal, "tumble", diff3TumbleFmt, false);
-bindDiff3Param(els.d3NodeLimit, els.d3NodeLimitVal, "nodeLimit", lab2NodeLimitFmt, false);
-
-const dofSplitFmt = (v) => {
-  const stage = getStageRect();
-  const prm = typeof dofComputeParams === "function"
-    ? dofComputeParams({ ...state.dof, split: v }, stage.width || 800, stage.height || 600)
-    : { insertDistance: 5 };
-  return `${Math.round(prm.insertDistance)} px`;
-};
-
-function bindDofParam(input, valEl, key, fmt) {
-  if (!input || !valEl) return;
-  input.value = String(state.dof[key]);
-  valEl.textContent = fmt(state.dof[key]);
-  input.addEventListener("input", () => {
-    state.dof[key] = parseFloat(input.value);
-    valEl.textContent = fmt(state.dof[key]);
-    if (key === "nodeLimit") refreshDofMaxNodesLabel();
-  });
-}
-
-bindDofParam(els.dofLink, els.dofLinkVal, "link", dofLinkFmt);
-bindDofParam(els.dofAttraction, els.dofAttractionVal, "attraction", pct);
-bindDofParam(els.dofRepulsion, els.dofRepulsionVal, "repulsion", pct);
-bindDofParam(els.dofSplit, els.dofSplitVal, "split", dofSplitFmt);
-bindDofParam(els.dofTumble, els.dofTumbleVal, "tumble", dofTumbleFmt);
-bindDofParam(els.dofNodeLimit, els.dofNodeLimitVal, "nodeLimit", lab2NodeLimitFmt);
-
-function refreshDofNodesLabel() {
-  if (els.dofNodes) els.dofNodes.textContent = `nodes: ${state.dof.showNodes ? "an" : "aus"}`;
-}
-if (els.dofNodes) {
-  els.dofNodes.addEventListener("click", () => {
-    state.dof.showNodes = !state.dof.showNodes;
-    refreshDofNodesLabel();
-  });
-  refreshDofNodesLabel();
-}
-
-function bindLabSplit() {
-  if (!els.labSplit || !els.labSplitVal) return;
-  const fmt = typeof labSplitFmt === "function" ? labSplitFmt : (v) => `${Math.round(v * 100)}%`;
-  els.labSplit.value = String(state.lab.split);
-  els.labSplitVal.textContent = fmt(state.lab.split);
-  els.labSplit.addEventListener("input", () => {
-    state.lab.split = parseFloat(els.labSplit.value);
-    els.labSplitVal.textContent = fmt(state.lab.split);
-  });
-}
-bindLabSplit();
-
-function refreshLab2NodesLabel() {
-  if (els.l2Nodes) els.l2Nodes.textContent = `nodes: ${state.lab2.showNodes ? "an" : "aus"}`;
-}
-if (els.l2Nodes) {
-  els.l2Nodes.addEventListener("click", () => {
-    state.lab2.showNodes = !state.lab2.showNodes;
-    refreshLab2NodesLabel();
-  });
-  refreshLab2NodesLabel();
-}
-
-function refreshDiff3NodesLabel() {
-  if (els.d3Nodes) els.d3Nodes.textContent = `nodes: ${state.diff3d.showNodes ? "an" : "aus"}`;
-}
-if (els.d3Nodes) {
-  els.d3Nodes.addEventListener("click", () => {
-    state.diff3d.showNodes = !state.diff3d.showNodes;
-    refreshDiff3NodesLabel();
-  });
-  refreshDiff3NodesLabel();
-}
-
-function refreshLab2LegacyLabel() {
-  if (!els.l2Legacy) return;
-  els.l2Legacy.classList.toggle("is-active", state.lab2.legacy);
-  els.l2Legacy.textContent = state.lab2.legacy
-    ? "klassik aktiv"
-    : "klassik (explosion)";
-}
-
-els.play.addEventListener("click", () => setPaused(!state.paused));
-els.reset.addEventListener("click", () => {
-  if (state.mode === "diff3d") {
-    state.diff3d.graph = null;
-    if (sim && sim.clearGraph) sim.clearGraph();
-    else rebuildSim();
-    refreshDiff3MaxNodesLabel();
-    return;
+function migrateForceFields(st) {
+  if (st.forceType != null) {
+    const strength = st.force ?? 0.5;
+    st.force = st.forceType === "repulsion"
+      ? 0.5 + strength * 0.5
+      : 0.5 - strength * 0.5;
+    delete st.forceType;
   }
-  if (state.mode === "dof") {
-    state.dof.graph = null;
-    if (sim && sim.clearGraph) sim.clearGraph();
-    else rebuildSim();
-    refreshDofMaxNodesLabel();
-    return;
-  }
-  rebuildSim();
+  if (st.force == null) st.force = 0.5;
+}
+
+function applyForceParams(st) {
+  const f = st.force ?? 0.5;
+  st.attraction = 1 - f;
+  st.repulsion = f;
+}
+
+function forceStrength(st) {
+  const f = st.force ?? 0.5;
+  return f <= 0.5 ? 1 - f : f;
+}
+
+function initForceFields(st) {
+  migrateForceFields(st);
+  applyForceParams(st);
+}
+
+/* parameter-regler (ein satz, adaptiv pro modus) */
+const PARAMS = {
+  stroke: { id: "param-stroke", val: "val-stroke" },
+  force: { id: "param-force", val: "val-force" },
+  complexity: { id: "param-complexity", val: "val-complexity" },
+  split: { id: "param-split", val: "val-split" },
+  link: { id: "param-link", val: "val-link" },
+  tumble: { id: "param-tumble", val: "val-tumble" },
+};
+Object.keys(PARAMS).forEach((k) => {
+  PARAMS[k].input = document.getElementById(PARAMS[k].id);
+  PARAMS[k].out = document.getElementById(PARAMS[k].val);
 });
-if (els.l2Legacy) {
-  els.l2Legacy.addEventListener("click", () => {
-    state.lab2.legacy = !state.lab2.legacy;
-    refreshLab2LegacyLabel();
+
+const fmtPct = (v) => `${Math.round(v * 100)}%`;
+const fmtComplexity = (v) => `~${Math.round(10 + v * 90)}`;
+
+function stageWH() {
+  const s = getStageRect();
+  return { w: s.width || 800, h: s.height || 600 };
+}
+
+function fmtSplitFor(mode, v) {
+  const { w, h } = stageWH();
+  try {
+    if (mode === "diff3d" && typeof diff3ComputeParams === "function") {
+      return `${Math.round(diff3ComputeParams({ ...state.diff3d, split: v }, w, h).insertDistance)} px`;
+    }
+    if (mode === "dof" && typeof dofComputeParams === "function") {
+      return `${Math.round(dofComputeParams({ ...state.dof, split: v }, w, h).insertDistance)} px`;
+    }
+    if (typeof lab2ComputeParams === "function") {
+      return `${Math.round(lab2ComputeParams({ ...state.lab2, split: v }, w, h).insertDistance)} px`;
+    }
+  } catch (err) {
+    /* ignore */
+  }
+  return `${Math.round(v * 100)}%`;
+}
+
+function currentIs3d() {
+  return state.mode === "diff3d" || state.mode === "dof";
+}
+
+function activeParamState() {
+  if (state.mode === "diff3d") return state.diff3d;
+  if (state.mode === "dof") return state.dof;
+  return state.lab2;
+}
+
+/* welche regler sind im modus aktiv + formatierung + ob neu aufbauen */
+function paramConfig(mode) {
+  const common = {
+    force: { fmt: fmtPct, rebuild: false },
+    complexity: { fmt: fmtComplexity, rebuild: mode === "lab2" },
+    split: { fmt: (v) => fmtSplitFor(mode, v), rebuild: mode === "lab2" },
+  };
+  if (mode === "diff3d" || mode === "dof") {
+    return {
+      ...common,
+      link: { fmt: mode === "dof" ? dofLinkFmt : diff3LinkFmt, rebuild: false },
+      tumble: { fmt: mode === "dof" ? dofTumbleFmt : diff3TumbleFmt, rebuild: false },
+    };
+  }
+  return { ...common, stroke: { fmt: lab2StrokeFmt, rebuild: false } };
+}
+
+Object.keys(PARAMS).forEach((key) => {
+  const def = PARAMS[key];
+  if (!def.input) return;
+  def.input.addEventListener("input", () => {
+    const st = activeParamState();
+    if (key === "force") {
+      st.force = parseFloat(def.input.value);
+      applyForceParams(st);
+      const pct = forceStrength(st);
+      if (def.out) def.out.textContent = fmtPct(pct);
+      return;
+    } else if (!(key in st)) {
+      return;
+    } else {
+      st[key] = parseFloat(def.input.value);
+    }
+    const v = key === "force" ? st.force : st[key];
+    const cfg = paramConfig(state.mode)[key];
+    if (def.out && cfg) def.out.textContent = cfg.fmt(v);
+    if (cfg && cfg.rebuild) rebuildSim();
+  });
+});
+
+function syncForceUI() {
+  const st = activeParamState();
+  initForceFields(st);
+  const def = PARAMS.force;
+  const pct = forceStrength(st);
+  if (def.input) def.input.value = String(st.force);
+  if (def.out) def.out.textContent = fmtPct(pct);
+}
+
+function syncVersionUI() {
+  const is3d = currentIs3d();
+  if (ui.verSectionLabel) {
+    ui.verSectionLabel.textContent = is3d ? "3d growth" : "differential growth";
+  }
+  let activeVer;
+  if (is3d) activeVer = state.mode === "dof" ? 1 : 2;
+  else activeVer = state.lab2.legacy ? 2 : 1;
+  ui.verBtns.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.ver) === activeVer));
+  ui.navTabs.forEach((b) => {
+    const nav = b.dataset.nav;
+    let active = false;
+    if (nav === "3d") active = is3d;
+    else if (!is3d) active = state.input === nav;
+    b.classList.toggle("is-active", active);
+  });
+}
+
+function syncNodesLabel() {
+  const st = activeParamState();
+  if (ui.nodes) ui.nodes.textContent = `nodes: ${st.showNodes ? "an" : "aus"}`;
+}
+
+function syncPanelForMode() {
+  const cfg = paramConfig(state.mode);
+  const st = activeParamState();
+  initForceFields(st);
+  Object.keys(PARAMS).forEach((key) => {
+    const def = PARAMS[key];
+    if (!def.input) return;
+    if (key === "force") {
+      if (cfg.force) syncForceUI();
+      return;
+    }
+    if (cfg[key] && key in st) {
+      def.input.value = String(st[key]);
+      if (def.out) def.out.textContent = cfg[key].fmt(st[key]);
+    }
+  });
+  syncVersionUI();
+  syncNodesLabel();
+}
+
+/* ---- topbar-nav: text / draw / 3D ---- */
+ui.navTabs.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const nav = btn.dataset.nav;
+    if (nav === "3d") {
+      setMode(state.threeVersion === 1 ? "dof" : "diff3d");
+    } else {
+      if (currentIs3d()) setMode("lab2");
+      state.lab2.legacy = state.flatVersion === 2;
+      setInput(nav);
+      syncVersionUI();
+    }
+  });
+});
+
+/* ---- version 1 / 2 ---- */
+ui.verBtns.forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const ver = Number(btn.dataset.ver);
+    if (currentIs3d()) {
+      state.threeVersion = ver;
+      setMode(ver === 1 ? "dof" : "diff3d");
+    } else {
+      state.flatVersion = ver;
+      state.lab2.legacy = ver === 2;
+      syncVersionUI();
+      rebuildSim();
+    }
+  });
+});
+
+/* ---- tempo ---- */
+if (ui.speed) {
+  ui.speed.addEventListener("input", () => {
+    state.speed = parseFloat(ui.speed.value);
+    syncSpeedUI();
+    saveSpeedToStorage();
+  });
+}
+
+/* ---- nodes an/aus ---- */
+if (ui.nodes) {
+  ui.nodes.addEventListener("click", () => {
+    const st = activeParamState();
+    st.showNodes = !st.showNodes;
+    syncNodesLabel();
+  });
+}
+
+/* ---- pause ---- */
+if (ui.play) ui.play.addEventListener("click", () => setPaused(!state.paused));
+
+/* ---- neu wachsen ---- */
+if (ui.reset) {
+  ui.reset.addEventListener("click", () => {
+    if (state.mode === "diff3d") {
+      state.diff3d.graph = null;
+      if (sim && sim.clearGraph) sim.clearGraph();
+      else rebuildSim();
+      return;
+    }
+    if (state.mode === "dof") {
+      state.dof.graph = null;
+      if (sim && sim.clearGraph) sim.clearGraph();
+      else rebuildSim();
+      return;
+    }
     rebuildSim();
   });
-  refreshLab2LegacyLabel();
 }
-const MODE_FILE_NAMES = {
-  lab2: "differential-growth",
-  diff3d: "3d-growth",
-  dof: "3d-web",
-  lab: "lab",
-  reactor: "reactor",
-};
 
-els.save.addEventListener("click", () => {
-  const name = MODE_FILE_NAMES[state.mode] || state.mode;
-  if (p5i) p5i.saveCanvas(`weirdgrowth-${name}-${Date.now()}`, "png");
-});
-els.svg.addEventListener("click", exportSVG);
+/* ---- zeichnung leeren ---- */
+if (ui.clear) {
+  ui.clear.addEventListener("click", () => {
+    if (drawG) drawG.clear();
+    if (drawSeedG) drawSeedG.clear();
+    drawStrokeBefore = null;
+    drewThisStroke = false;
+    isDrawingStroke = false;
+    rebuildSim();
+  });
+}
+
+/* ---- export ---- */
+const MODE_FILE_NAMES = { lab2: "differential-growth", diff3d: "3d-growth", dof: "3d-web" };
+if (ui.save) {
+  ui.save.addEventListener("click", () => {
+    const name =
+      state.mode === "lab2" && state.lab2.legacy
+        ? "klassik"
+        : MODE_FILE_NAMES[state.mode] || state.mode;
+    if (p5i) p5i.saveCanvas(`weirdgrowth-${name}-${Date.now()}`, "png");
+  });
+}
+if (ui.svg) ui.svg.addEventListener("click", exportSVG);
+
+/* ---- texteingabe ---- */
+bindSeedTextField();
+
+/* ---- info-fenster ---- */
+function openInfo() {
+  if (ui.infoModal) ui.infoModal.hidden = false;
+}
+function closeInfo() {
+  if (ui.infoModal) ui.infoModal.hidden = true;
+}
+if (ui.info) ui.info.addEventListener("click", openInfo);
+if (ui.infoClose) ui.infoClose.addEventListener("click", closeInfo);
+if (ui.infoModal) {
+  ui.infoModal.addEventListener("click", (e) => {
+    if (e.target === ui.infoModal) closeInfo();
+  });
+}
 
 window.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeInfo();
+    return;
+  }
   if (e.target.matches("input, button, textarea, select")) return;
   if (e.key === " ") {
     e.preventDefault();
@@ -2913,16 +3077,84 @@ if (sidePanelEl && typeof ResizeObserver !== "undefined") {
 window.addEventListener("resize", onMobileSheetLayoutChange);
 onMobileSheetLayoutChange();
 
-/* init */
-loadSpeedFromStorage();
-syncSpeedUI();
-els.aVal.textContent = MODES[state.mode].fmtA(state.a);
-els.bVal.textContent = MODES[state.mode].fmtB(state.b);
-els.cVal.textContent = MODES[state.mode].fmtC(state.c);
-els.brushVal.textContent = String(state.brush);
-updateInputFontSize();
-if (els.textField) {
-  els.textField.focus();
-  els.textField.select();
+/* ---- intro: differential growth + zoom während wachstum ---- */
+function runIntro() {
+  const intro = document.getElementById("intro");
+  if (!intro) {
+    document.body.classList.add("entered");
+    return;
+  }
+
+  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
+  let done = false;
+  const wasPaused = state.paused;
+  state.paused = true;
+
+  const completeIntro = () => {
+    if (done) return;
+    done = true;
+    if (typeof IntroGrowth !== "undefined") IntroGrowth.teardown();
+    intro.hidden = true;
+    if (ui.textField && state.input === "text") {
+      ui.textField.focus();
+      updateSeedCaret();
+    }
+  };
+
+  const beginFly = () => {
+    document.body.classList.add("entered");
+    state.paused = wasPaused;
+    setPaused(wasPaused);
+    intro.classList.add("zoom");
+  };
+
+  intro.addEventListener("click", () => {
+    if (done) return;
+    if (typeof IntroGrowth !== "undefined") IntroGrowth.skip();
+    else {
+      beginFly();
+      completeIntro();
+    }
+  });
+
+  if (reduce || typeof IntroGrowth === "undefined") {
+    window.setTimeout(() => {
+      beginFly();
+      completeIntro();
+    }, 280);
+    return;
+  }
+
+  IntroGrowth.start(beginFly, completeIntro);
+
+  window.setTimeout(() => {
+    if (!done && typeof IntroGrowth !== "undefined") IntroGrowth.skip();
+    else if (!done) {
+      beginFly();
+      completeIntro();
+    }
+  }, 5200);
 }
-new p5(sketch);
+
+/* init */
+async function loadDisplayFonts() {
+  try {
+    const regular = new FontFace(DISPLAY_FONT, "url(fonts/Astloch-Regular.ttf)");
+    const bold = new FontFace(DISPLAY_FONT, "url(fonts/Astloch-Bold.ttf)", { weight: "700" });
+    await Promise.all([regular.load(), bold.load()]);
+    document.fonts.add(regular);
+    document.fonts.add(bold);
+  } catch (err) {
+    /* ignore */
+  }
+}
+
+loadDisplayFonts().then(() => {
+  loadSpeedFromStorage();
+  syncSpeedUI();
+  setMode(state.mode);
+  setInput(state.input);
+  updateInputFontSize();
+  runIntro();
+  new p5(sketch);
+});

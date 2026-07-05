@@ -127,52 +127,66 @@ function dofPickOnSphere(cam, sx, sy, center, radius) {
 }
 
 function dofDrawSphereGuide(p, cam, center, radius) {
-  const segments = 64;
+  const segments = 88;
+  const vpn = diff3Vec3Norm(cam.vpn || { x: 0, y: 0, z: -1 });
+  let axisU = diff3Vec3Cross(vpn, { x: 0, y: 1, z: 0 });
+  if (Math.hypot(axisU.x, axisU.y, axisU.z) < 1e-4) {
+    axisU = diff3Vec3Cross(vpn, { x: 1, y: 0, z: 0 });
+  }
+  axisU = diff3Vec3Norm(axisU) || { x: 1, y: 0, z: 0 };
+  const axisV = diff3Vec3Norm(diff3Vec3Cross(vpn, axisU)) || { x: 0, y: 1, z: 0 };
+
   p.noFill();
-  p.stroke(210);
   p.strokeWeight(1);
 
-  function drawCircle(axis) {
+  function drawRing(ringCenter, ringU, ringV, ringR, frontOnly) {
     let prev = null;
+    let prevOk = false;
     for (let i = 0; i <= segments; i++) {
       const a = (i / segments) * Math.PI * 2;
-      let pt;
-      if (axis === "xy") {
-        pt = dofProjectToSphere(
-          center.x + Math.cos(a) * radius,
-          center.y + Math.sin(a) * radius,
-          center.z,
-          center,
-          radius
-        );
-      } else if (axis === "xz") {
-        pt = dofProjectToSphere(
-          center.x + Math.cos(a) * radius,
-          center.y,
-          center.z + Math.sin(a) * radius,
-          center,
-          radius
-        );
-      } else {
-        pt = dofProjectToSphere(
-          center.x,
-          center.y + Math.cos(a) * radius,
-          center.z + Math.sin(a) * radius,
-          center,
-          radius
-        );
-      }
+      const cu = Math.cos(a);
+      const cv = Math.sin(a);
+      const pt = {
+        x: ringCenter.x + (ringU.x * cu + ringV.x * cv) * ringR,
+        y: ringCenter.y + (ringU.y * cu + ringV.y * cv) * ringR,
+        z: ringCenter.z + (ringU.z * cu + ringV.z * cv) * ringR,
+      };
+      const facing = (pt.x - center.x) * vpn.x
+        + (pt.y - center.y) * vpn.y
+        + (pt.z - center.z) * vpn.z <= radius * 0.04;
       const pr = cam.project(pt);
-      if (prev && Number.isFinite(pr.x) && Number.isFinite(prev.x)) {
-        p.line(prev.x, prev.y, pr.x, pr.y);
-      }
-      prev = pr;
+      const ok = Number.isFinite(pr.x) && Number.isFinite(pr.y) && (!frontOnly || facing);
+      if (ok && prevOk && prev) p.line(prev.x, prev.y, pr.x, pr.y);
+      prev = ok ? pr : null;
+      prevOk = ok;
     }
   }
 
-  drawCircle("xy");
-  drawCircle("xz");
-  drawCircle("yz");
+  // sichtbare außenkontur — keine achsenkreuzung
+  p.stroke(190);
+  drawRing(center, axisU, axisV, radius, false);
+
+  // zwei geneigte breitengrade (nur vorderseite), leicht versetzt
+  p.stroke(228);
+  for (const tilt of [-0.62, 0.62]) {
+    const bandNormal = diff3Vec3Norm({
+      x: axisU.x * 0.42 + vpn.x * tilt,
+      y: axisU.y * 0.42 + vpn.y * tilt,
+      z: axisU.z * 0.42 + vpn.z * tilt,
+    });
+    let ringU = diff3Vec3Cross(bandNormal, vpn);
+    if (Math.hypot(ringU.x, ringU.y, ringU.z) < 1e-4) continue;
+    ringU = diff3Vec3Norm(ringU);
+    const ringV = diff3Vec3Norm(diff3Vec3Cross(bandNormal, ringU));
+    const dist = radius * Math.abs(tilt);
+    const ringCenter = {
+      x: center.x + bandNormal.x * dist,
+      y: center.y + bandNormal.y * dist,
+      z: center.z + bandNormal.z * dist,
+    };
+    const ringR = Math.sqrt(Math.max(radius * radius - dist * dist, radius * radius * 0.35));
+    drawRing(ringCenter, ringU, ringV, ringR, true);
+  }
 }
 
 function dofSnapNodesToSphere(nodes, center, radius) {

@@ -725,6 +725,16 @@ const Lab2GrowthMode = {
       }
       lab2SnapHoleRings(lines);
 
+      // version 1 (differential growth): kurze kanten zusammenführen, damit die
+      // node-dichte im gleichgewicht bleibt und nicht monoton bis zum limit wächst
+      // (verhindert "zu viele striche" + performance-einbruch).
+      if (!legacy) {
+        const mergeDist = cfg.insertDistance * 0.5;
+        for (let li = 0; li < lines.length; li++) {
+          lab2PruneShortEdges(lines[li].nodes, mergeDist);
+        }
+      }
+
       const total = totalNodes();
       if (total >= cfg.maxNodes) {
         insertStopped = true;
@@ -732,7 +742,11 @@ const Lab2GrowthMode = {
         let insertDist = cfg.insertDistance;
         const ratio = total / cfg.maxNodes;
         if (ratio > 0.8) insertDist *= 1 + (ratio - 0.8) * 6;
-        const budget = ratio > 0.65 ? Math.max(1, Math.floor((1 - ratio) * 24)) : Infinity;
+        // pro frame nur begrenzt viele nodes einfügen — kein plötzlicher schub,
+        // der die szene in einem frame vervielfacht.
+        const budget = ratio > 0.55
+          ? Math.max(1, Math.floor((1 - ratio) * 24))
+          : Math.max(8, Math.floor(total * 0.12) + 8);
         for (let li = 0; li < lines.length; li++) {
           lab2InsertLine(lines[li].nodes, insertDist, budget);
         }
@@ -755,6 +769,16 @@ const Lab2GrowthMode = {
         const added = contoursToLab2Lines(contours, lab2Cfg());
         for (let i = 0; i < added.length; i++) lines.push(added[i]);
         insertStopped = false;
+      },
+
+      // alles vom canvas entfernen (notfall-/stabilitäts-löschung)
+      clearAll() {
+        lines = [];
+        insertStopped = true;
+      },
+
+      nodeCount() {
+        return totalNodes();
       },
 
       getLines() {

@@ -7,378 +7,171 @@
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=29">
+  <link rel="stylesheet" href="css/style.css?v=60">
   <script src="js/lib/p5.min.js"></script>
 </head>
-<body class="is-text mode-lab mode-lab2" data-mode="lab2" tabindex="-1">
+<body class="is-text ctx-flat" data-mode="lab2" data-ctx="flat" tabindex="-1">
 
-  <!-- oben: eingabe-modi -->
+  <!-- intro: differential growth, zoom während wachstum -->
+  <div id="intro" class="intro">
+    <div class="intro-inner">
+      <h1 class="intro-word">weird growth</h1>
+      <div class="intro-zoom-target" id="intro-zoom-target">
+        <div id="intro-canvas-host" class="intro-canvas-host" aria-hidden="true"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- topbar: brand · modi · info -->
   <header class="topbar">
-    <nav class="input-modes" aria-label="Eingabe">
-      <canvas id="topbar-glass-canvas" class="ui-glass-canvas" aria-hidden="true"></canvas>
-      <button type="button" class="mode-tab is-active" data-input="text">text</button>
-      <button type="button" class="mode-tab" data-input="draw">draw</button>
+    <div class="brand">weird growth</div>
+    <nav class="nav" aria-label="Modus">
+      <button type="button" class="nav-tab is-active" data-nav="text">text</button>
+      <button type="button" class="nav-tab" data-nav="draw">draw</button>
+      <button type="button" class="nav-tab" data-nav="3d">3D</button>
     </nav>
+    <button type="button" class="info-btn" id="btn-info" aria-label="Info">i</button>
   </header>
 
-  <!-- mitte: leinwand -->
+  <!-- leinwand (nur im freien bereich links vom panel) -->
   <main class="stage" aria-label="Leinwand">
     <div id="canvas-host"></div>
   </main>
 
-  <!-- großes texteingabefeld (typereactor-stil) -->
+  <!-- texteingabe in der mitte -->
   <div class="text-layer" id="text-layer">
-    <span class="seed-sizer" id="seed-sizer" aria-hidden="true">TYPE HERE</span>
-    <input
-      type="text"
-      id="seed-text"
-      class="seed-input"
-      value="TYPE HERE"
-      placeholder="TYPE HERE"
-      maxlength="20"
-      autocomplete="off"
-      spellcheck="false"
-      aria-label="Text eingeben"
-    >
+    <div class="seed-editor" id="seed-editor">
+      <span class="seed-sizer" id="seed-sizer" aria-hidden="true">type here</span>
+      <span class="seed-measure-before" id="seed-measure-before" aria-hidden="true"></span>
+      <div class="seed-line" id="seed-line">
+        <span class="seed-hint" id="seed-hint">type here</span>
+        <input
+          type="text"
+          id="seed-text"
+          class="seed-input"
+          value=""
+          placeholder="type here"
+          maxlength="20"
+          autocomplete="off"
+          spellcheck="false"
+          aria-label="Text eingeben"
+        >
+        <span class="seed-caret" id="seed-caret" aria-hidden="true"></span>
+      </div>
+    </div>
   </div>
 
-  <!-- rechts: generative modi + parameter -->
-  <aside class="side-panel" aria-label="Generative Modi">
-    <canvas id="panel-glass-canvas" class="ui-glass-canvas" aria-hidden="true"></canvas>
+  <!-- rechtes panel -->
+  <aside class="side-panel" aria-label="Steuerung">
     <div class="panel-content">
-    <section class="panel-block">
-      <h2 class="panel-label">Growth Modes</h2>
-      <div class="growth-modes" role="group" aria-label="Wuchs-Art">
-        <button type="button" class="growth-mode" data-mode="diff3d">
-          <span class="growth-mode-name">3D Growth</span>
-          <span class="growth-mode-tag">depth of field</span>
-        </button>
-        <button type="button" class="growth-mode" data-mode="dof">
-          <span class="growth-mode-name">3D Web</span>
-          <span class="growth-mode-tag">sphere growth</span>
-        </button>
-        <button type="button" class="growth-mode is-active" data-mode="lab2">
-          <span class="growth-mode-name">Differential Growth</span>
-          <span class="growth-mode-tag">unequal expansion</span>
-        </button>
-        <button type="button" class="growth-mode" data-mode="lab">
-          <span class="growth-mode-name">lab</span>
-          <span class="growth-mode-tag">experiment</span>
-        </button>
-        <button type="button" class="growth-mode" data-mode="reactor">
-          <span class="growth-mode-name">Reactor</span>
-          <span class="growth-mode-tag">weird lines</span>
-        </button>
-      </div>
-      <p class="mode-desc" id="mode-desc">
-        Differential line growth (Patt Vira) — knoten an schrift-outline / gezeichneter linie,
-        separation + cohesion, wachstum durch insert.
-      </p>
-    </section>
 
-    <section class="panel-block reactor-tools">
-      <h2 class="panel-label">font</h2>
-      <label class="control" for="param-reactor-font">
-        <span class="control-head">schrift</span>
-        <input
-          type="text"
-          id="param-reactor-font"
-          class="panel-input"
-          value="Helvetica Neue"
-          list="reactor-font-presets"
-          spellcheck="false"
-          autocomplete="off"
-          aria-label="Schriftfamilie"
-        >
-      </label>
-      <datalist id="reactor-font-presets">
-        <option value="Helvetica Neue"></option>
-        <option value="Helvetica"></option>
-        <option value="Arial"></option>
-        <option value="Georgia"></option>
-        <option value="Times New Roman"></option>
-        <option value="Courier New"></option>
-        <option value="Impact"></option>
-      </datalist>
-      <label class="control" for="param-reactor-font-url">
-        <span class="control-head">font-datei</span>
-        <input
-          type="text"
-          id="param-reactor-font-url"
-          class="panel-input"
-          placeholder="fonts/name.woff2"
-          spellcheck="false"
-          autocomplete="off"
-          aria-label="Pfad zur Font-Datei"
-        >
-      </label>
-      <p class="mode-desc reactor-font-hint">
-        System-Schrift oder eigene Datei per Pfad — wird per FontFace geladen (wie bei typereactor, ohne Drag &amp; Drop).
-      </p>
-    </section>
+      <section class="panel-block">
+        <h2 class="panel-label" id="ver-section-label">differential growth</h2>
+        <div class="btn-grid version-toggle" role="group" aria-label="Version">
+          <button type="button" class="panel-btn ver-btn is-active" data-ver="1">version 1</button>
+          <button type="button" class="panel-btn ver-btn" data-ver="2">version 2</button>
+        </div>
+      </section>
 
-    <section class="panel-block draw-tools">
-      <h2 class="panel-label draw-brush-label">pinsel</h2>
-      <label class="control draw-brush-control" for="param-brush">
-        <span class="control-head">
-          dicke
-          <output id="val-brush" class="control-val">24</output>
-        </span>
-        <input type="range" id="param-brush" min="6" max="72" step="2" value="24">
-      </label>
-      <button type="button" id="btn-clear" class="panel-btn">zeichnung leeren</button>
-    </section>
-
-    <section class="panel-block">
-      <h2 class="panel-label">parameter</h2>
-      <label class="control" for="param-speed">
-        <span class="control-head">
-          tempo
-          <output id="val-speed" class="control-val">1.5×</output>
-        </span>
-        <input type="range" id="param-speed" min="0.2" max="5" step="0.1" value="1.5">
-      </label>
-      <div class="classic-params">
-        <label class="control" for="param-a">
-          <span class="control-head">
-            liniendicke
-            <output id="val-a" class="control-val">13 px</output>
-          </span>
-          <input type="range" id="param-a" min="0" max="1" step="0.01" value="0.5">
+      <section class="panel-block">
+        <label class="control" for="param-speed">
+          <span class="control-head">tempo <output id="val-speed" class="control-val">1.5×</output></span>
+          <input type="range" id="param-speed" min="0.2" max="5" step="0.1" value="1.5">
         </label>
-        <label class="control" for="param-b">
-          <span class="control-head">
-            abstand
-            <output id="val-b" class="control-val">32 px</output>
-          </span>
-          <input type="range" id="param-b" min="0" max="1" step="0.01" value="0.5">
+        <div class="btn-grid">
+          <button type="button" id="btn-nodes" class="panel-btn">nodes: aus</button>
+          <button type="button" id="btn-play" class="panel-btn">pause</button>
+          <button type="button" id="btn-clear" class="panel-btn btn-wide ctl-draw">zeichnung leeren</button>
+          <button type="button" id="btn-reset" class="panel-btn btn-wide">neu wachsen</button>
+        </div>
+      </section>
+
+      <section class="panel-block">
+        <h2 class="panel-label">parameter</h2>
+
+        <label class="control ctl-stroke" for="param-stroke">
+          <span class="control-head">liniendicke <output id="val-stroke" class="control-val">2 px</output></span>
+          <input type="range" id="param-stroke" min="0" max="1" step="0.01" value="0.1">
         </label>
-        <label class="control classic-param-c" for="param-c">
-          <span class="control-head">
-            teilung
-            <output id="val-c" class="control-val">14 px</output>
-          </span>
-          <input type="range" id="param-c" min="0" max="1" step="0.01" value="0.5">
+
+        <div class="force-block">
+          <label class="control force-control" for="param-force">
+            <span class="control-head"><output id="val-force" class="control-val">50%</output></span>
+            <div class="force-slider">
+              <span class="force-end">anziehung</span>
+              <input type="range" id="param-force" min="0" max="1" step="0.01" value="0.5">
+              <span class="force-end">abstoßung</span>
+            </div>
+          </label>
+        </div>
+
+        <label class="control" for="param-complexity">
+          <span class="control-head">komplexität <output id="val-complexity" class="control-val">~20</output></span>
+          <input type="range" id="param-complexity" min="0" max="1" step="0.01" value="0.11">
         </label>
-      </div>
-    </section>
 
-    <section class="panel-block lab-tools">
-      <h2 class="panel-label">lab</h2>
-      <label class="control" for="param-lab-split">
-        <span class="control-head">
-          teilungs-abstand
-          <output id="val-lab-split" class="control-val">31 px</output>
-        </span>
-        <input type="range" id="param-lab-split" min="0" max="1" step="0.01" value="0.5">
-      </label>
-    </section>
+        <label class="control" for="param-split">
+          <span class="control-head">neue node <output id="val-split" class="control-val">16 px</output></span>
+          <input type="range" id="param-split" min="0" max="1" step="0.01" value="0.31">
+        </label>
 
-    <section class="panel-block lab2-tools">
-      <h2 class="panel-label">differential growth</h2>
-      <label class="control" for="param-l2-stroke">
-        <span class="control-head">
-          liniendicke
-          <output id="val-l2-stroke" class="control-val">2 px</output>
-        </span>
-        <input type="range" id="param-l2-stroke" min="0" max="1" step="0.01" value="0.1">
-      </label>
-      <label class="control" for="param-l2-attraction">
-        <span class="control-head">
-          anziehung
-          <output id="val-l2-attraction" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-l2-attraction" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-l2-repulsion">
-        <span class="control-head">
-          abstoßung
-          <output id="val-l2-repulsion" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-l2-repulsion" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-l2-push">
-        <span class="control-head">
-          schub (form)
-          <output id="val-l2-push" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-l2-push" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-l2-complexity">
-        <span class="control-head">
-          komplexität
-          <output id="val-l2-complexity" class="control-val">~20</output>
-        </span>
-        <input type="range" id="param-l2-complexity" min="0" max="1" step="0.01" value="0.11">
-      </label>
-      <label class="control" for="param-l2-split">
-        <span class="control-head">
-          teilungs-abstand
-          <output id="val-l2-split" class="control-val">16 px</output>
-        </span>
-        <input type="range" id="param-l2-split" min="0" max="1" step="0.01" value="0.31">
-      </label>
-      <label class="control" for="param-l2-node-limit">
-        <span class="control-head">
-          node-limit
-          <output id="val-l2-node-limit" class="control-val">4000</output>
-        </span>
-        <input type="range" id="param-l2-node-limit" min="0" max="1" step="0.01" value="0.2">
-      </label>
-      <p class="lab2-max-hint">nodes: <output id="val-l2-maxnodes">0 / 4000</output></p>
-      <button type="button" id="btn-l2-nodes" class="panel-btn">nodes: aus</button>
-    </section>
+        <label class="control ctl-link" for="param-link">
+          <span class="control-head">verbindungen <output id="val-link" class="control-val">82 px</output></span>
+          <input type="range" id="param-link" min="0" max="1" step="0.01" value="0.45">
+        </label>
 
-    <section class="panel-block diff3d-tools">
-      <h2 class="panel-label">3d growth</h2>
-      <p class="lab2-max-hint">auf die leinwand klicken → seed-knoten setzen</p>
-      <label class="control" for="param-d3-link">
-        <span class="control-head">
-          verbindung
-          <output id="val-d3-link" class="control-val">82 px</output>
-        </span>
-        <input type="range" id="param-d3-link" min="0" max="1" step="0.01" value="0.45">
-      </label>
-      <label class="control" for="param-d3-attraction">
-        <span class="control-head">
-          anziehung
-          <output id="val-d3-attraction" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-d3-attraction" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-d3-repulsion">
-        <span class="control-head">
-          abstoßung
-          <output id="val-d3-repulsion" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-d3-repulsion" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-d3-depth">
-        <span class="control-head">
-          tiefe
-          <output id="val-d3-depth" class="control-val">45%</output>
-        </span>
-        <input type="range" id="param-d3-depth" min="0" max="1" step="0.01" value="0.45">
-      </label>
-      <label class="control" for="param-d3-complexity">
-        <span class="control-head">
-          komplexität
-          <output id="val-d3-complexity" class="control-val">~20</output>
-        </span>
-        <input type="range" id="param-d3-complexity" min="0" max="1" step="0.01" value="0.11">
-      </label>
-      <label class="control" for="param-d3-split">
-        <span class="control-head">
-          teilungs-abstand
-          <output id="val-d3-split" class="control-val">16 px</output>
-        </span>
-        <input type="range" id="param-d3-split" min="0" max="1" step="0.01" value="0.31">
-      </label>
-      <label class="control" for="param-d3-dof-focus">
-        <span class="control-head">
-          fokus
-          <output id="val-d3-dof-focus" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-d3-dof-focus" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-d3-dof-blur">
-        <span class="control-head">
-          unschärfe
-          <output id="val-d3-dof-blur" class="control-val">3 px</output>
-        </span>
-        <input type="range" id="param-d3-dof-blur" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-d3-exposure">
-        <span class="control-head">
-          belichtung
-          <output id="val-d3-exposure" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-d3-exposure" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-d3-tumble">
-        <span class="control-head">
-          kamera-drehung
-          <output id="val-d3-tumble" class="control-val">35%</output>
-        </span>
-        <input type="range" id="param-d3-tumble" min="0" max="1" step="0.01" value="0.35">
-      </label>
-      <label class="control" for="param-d3-node-limit">
-        <span class="control-head">
-          node-limit
-          <output id="val-d3-node-limit" class="control-val">4000</output>
-        </span>
-        <input type="range" id="param-d3-node-limit" min="0" max="1" step="0.01" value="0.2">
-      </label>
-      <p class="lab2-max-hint">nodes: <output id="val-d3-maxnodes">0 / 4000</output></p>
-      <button type="button" id="btn-d3-nodes" class="panel-btn">nodes: aus</button>
-    </section>
+        <label class="control ctl-tumble" for="param-tumble">
+          <span class="control-head">dreh-tempo <output id="val-tumble" class="control-val">35%</output></span>
+          <input type="range" id="param-tumble" min="0" max="1" step="0.01" value="0.35">
+        </label>
+      </section>
 
-    <section class="panel-block dof-tools">
-      <h2 class="panel-label">3d web</h2>
-      <p class="lab2-max-hint">auf die kugel klicken → knoten setzen</p>
-      <label class="control" for="param-dof-link">
-        <span class="control-head">
-          verbindung
-          <output id="val-dof-link" class="control-val">39 px</output>
-        </span>
-        <input type="range" id="param-dof-link" min="0" max="1" step="0.01" value="0.4">
-      </label>
-      <label class="control" for="param-dof-attraction">
-        <span class="control-head">
-          anziehung
-          <output id="val-dof-attraction" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-dof-attraction" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-dof-repulsion">
-        <span class="control-head">
-          abstoßung
-          <output id="val-dof-repulsion" class="control-val">50%</output>
-        </span>
-        <input type="range" id="param-dof-repulsion" min="0" max="1" step="0.01" value="0.5">
-      </label>
-      <label class="control" for="param-dof-split">
-        <span class="control-head">
-          teilungs-abstand
-          <output id="val-dof-split" class="control-val">12 px</output>
-        </span>
-        <input type="range" id="param-dof-split" min="0" max="1" step="0.01" value="0.31">
-      </label>
-      <label class="control" for="param-dof-tumble">
-        <span class="control-head">
-          kugel-drehung
-          <output id="val-dof-tumble" class="control-val">40%</output>
-        </span>
-        <input type="range" id="param-dof-tumble" min="0" max="1" step="0.01" value="0.4">
-      </label>
-      <label class="control" for="param-dof-node-limit">
-        <span class="control-head">
-          node-limit
-          <output id="val-dof-node-limit" class="control-val">4000</output>
-        </span>
-        <input type="range" id="param-dof-node-limit" min="0" max="1" step="0.01" value="0.2">
-      </label>
-      <p class="lab2-max-hint">nodes: <output id="val-dof-maxnodes">0 / 4000</output></p>
-      <button type="button" id="btn-dof-nodes" class="panel-btn">nodes: aus</button>
-    </section>
+      <section class="panel-block">
+        <h2 class="panel-label">export</h2>
+        <div class="btn-grid">
+          <button type="button" id="btn-svg" class="panel-btn">↓ svg</button>
+          <button type="button" id="btn-save" class="panel-btn">↓ png</button>
+        </div>
+      </section>
 
-    <section class="panel-block panel-actions">
-      <h2 class="panel-label">aktionen</h2>
-      <button type="button" id="btn-play" class="panel-btn">pause</button>
-      <button type="button" id="btn-reset" class="panel-btn">neu wachsen</button>
-      <button type="button" id="btn-l2-legacy" class="panel-btn">klassik (explosion)</button>
-      <button type="button" id="btn-svg" class="panel-btn">&darr; svg</button>
-      <button type="button" id="btn-save" class="panel-btn">&darr; png</button>
-    </section>
     </div>
   </aside>
 
-  <script src="js/lib/glass-core.js?v=1"></script>
+  <!-- info-fenster -->
+  <div class="modal" id="info-modal" hidden>
+    <div class="modal-window" role="dialog" aria-modal="true" aria-label="Info">
+      <div class="modal-title">
+        <span>weird growth.txt</span>
+        <button type="button" class="modal-close" id="btn-info-close" aria-label="Schließen">×</button>
+      </div>
+      <div class="modal-body">
+        <p><b>weird growth</b> — generative typografie. text oder zeichnung ist die keimform;
+        daraus wächst ein organisches liniennetz.</p>
+        <p><b>differential growth</b> startet als geschlossene kontur mit nodes entlang der linie.
+        nodes, die zu dicht liegen, stoßen sich ab — die form dehnt sich aus. wo lücken entstehen,
+        teilt sich die linie und neue nodes entstehen. so wächst die struktur langsam nach außen,
+        ohne sich beliebig zu überkreuzen (version 1). version 2 (klassik) nutzt ältere physik —
+        linien können sich überlagern und wirken explosiver.</p>
+        <p><b>modi:</b> <code>text</code> · <code>draw</code> · <code>3d</code>. panel rechts:
+        tempo, pause, neu wachsen, liniendicke, kraft (anziehung ↔ abstoßung), komplexität, export als svg/png.</p>
+        <p><b>version 1 / 2:</b> in text &amp; draw — differential growth vs. klassik. in 3d:
+        web (kugel-guide) vs. growth (räumliches diff-growth).</p>
+        <p class="modal-sources"><b>quellen &amp; weiterführend:</b></p>
+        <ul class="modal-links">
+          <li><a href="https://inconvergent.net/2016/shepherding-random-growth/" target="_blank" rel="noopener noreferrer">inconvergent — shepherding random growth</a> — grundlegende erklärung des algorithmus: zufällige keimform, abstoßung zwischen nodes, wachstum durch splits. basis für version 1.</li>
+          <li><a href="https://typereactor.xyz/" target="_blank" rel="noopener noreferrer">typereactor</a> — inspiration für generative typografie: buchstaben als lebendige, wachsende formen.</li>
+          <li><a href="https://www.youtube.com/watch?v=1viK2qKuP-Y" target="_blank" rel="noopener noreferrer">youtube — code tutorial</a> — schritt-für-schritt-implementierung von differential growth in code (p5.js / processing).</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
   <script src="js/lab-growth.js?v=9"></script>
-  <script src="js/lab2-growth.js?v=27"></script>
+  <script src="js/lab2-growth.js?v=29"></script>
+  <script src="js/intro-growth.js?v=10"></script>
   <script src="js/diff3d-growth.js?v=7"></script>
-  <script src="js/dof-growth.js?v=8"></script>
+  <script src="js/dof-growth.js?v=9"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=110"></script>
+  <script src="js/app.js?v=217"></script>
 </body>
 </html>
