@@ -2790,6 +2790,29 @@ function forceStrength(st) {
   return f <= 0.5 ? 1 - f : f;
 }
 
+function forceSide(st) {
+  const f = st.force ?? 0.5;
+  if (Math.abs(f - 0.5) < 0.02) return "neutral";
+  return f > 0.5 ? "repulsion" : "attraction";
+}
+
+function formatForceDisplay(st) {
+  const side = forceSide(st);
+  const pct = forceStrength(st);
+  if (side === "neutral") return "50%";
+  const label = side === "repulsion" ? "abstoßung" : "anziehung";
+  return `${fmtPct(pct)} ${label}`;
+}
+
+function syncForceEndLabels(side) {
+  const left = document.querySelector(".force-end--left");
+  const right = document.querySelector(".force-end--right");
+  const control = document.querySelector(".force-control");
+  if (control) control.dataset.side = side;
+  if (left) left.classList.toggle("is-active", side === "attraction");
+  if (right) right.classList.toggle("is-active", side === "repulsion");
+}
+
 function initForceFields(st) {
   migrateForceFields(st);
   applyForceParams(st);
@@ -2870,8 +2893,8 @@ Object.keys(PARAMS).forEach((key) => {
     if (key === "force") {
       st.force = parseFloat(def.input.value);
       applyForceParams(st);
-      const pct = forceStrength(st);
-      if (def.out) def.out.textContent = fmtPct(pct);
+      if (def.out) def.out.textContent = formatForceDisplay(st);
+      syncForceEndLabels(forceSide(st));
       return;
     } else if (!(key in st)) {
       return;
@@ -2889,9 +2912,9 @@ function syncForceUI() {
   const st = activeParamState();
   initForceFields(st);
   const def = PARAMS.force;
-  const pct = forceStrength(st);
   if (def.input) def.input.value = String(st.force);
-  if (def.out) def.out.textContent = fmtPct(pct);
+  if (def.out) def.out.textContent = formatForceDisplay(st);
+  syncForceEndLabels(forceSide(st));
 }
 
 function syncVersionUI() {
