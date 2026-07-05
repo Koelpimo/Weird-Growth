@@ -238,7 +238,7 @@ const STABILITY_TRIP_FRAMES = 45; // ~0.75s durchgehend zu langsam
 const STABILITY_WARMUP_FRAMES = 60; // erst nach kurzer aufwärmphase prüfen
 let lowFpsFrames = 0;
 
-function emergencyClear() {
+function clearCanvas() {
   if (state.input === "draw") {
     if (drawG) drawG.clear();
     if (drawSeedG) drawSeedG.clear();
@@ -246,9 +246,24 @@ function emergencyClear() {
     drewThisStroke = false;
     isDrawingStroke = false;
   }
+  if (state.mode === "diff3d") {
+    state.diff3d.graph = null;
+    if (sim && sim.clearGraph) sim.clearGraph();
+    else rebuildSim();
+    return;
+  }
+  if (state.mode === "dof") {
+    state.dof.graph = null;
+    if (sim && sim.clearGraph) sim.clearGraph();
+    else rebuildSim();
+    return;
+  }
   if (sim && typeof sim.clearAll === "function") sim.clearAll();
-  else if (sim && typeof sim.clearGraph === "function") sim.clearGraph();
   else rebuildSim();
+}
+
+function emergencyClear() {
+  clearCanvas();
   lowFpsFrames = 0;
 }
 
@@ -3014,7 +3029,7 @@ if (ui.nodes) {
 /* ---- pause ---- */
 if (ui.play) ui.play.addEventListener("click", () => setPaused(!state.paused));
 
-/* ---- leeren (aktuelles objekt vom canvas entfernen) ---- */
+/* ---- neu wachsen ---- */
 if (ui.reset) {
   ui.reset.addEventListener("click", () => {
     if (state.mode === "diff3d") {
@@ -3029,20 +3044,14 @@ if (ui.reset) {
       else rebuildSim();
       return;
     }
-    if (sim && typeof sim.clearAll === "function") sim.clearAll();
-    else rebuildSim();
+    rebuildSim();
   });
 }
 
-/* ---- zeichnung leeren ---- */
+/* ---- leeren ---- */
 if (ui.clear) {
   ui.clear.addEventListener("click", () => {
-    if (drawG) drawG.clear();
-    if (drawSeedG) drawSeedG.clear();
-    drawStrokeBefore = null;
-    drewThisStroke = false;
-    isDrawingStroke = false;
-    rebuildSim();
+    clearCanvas();
   });
 }
 

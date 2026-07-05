@@ -528,15 +528,6 @@ body.ctx-3d .ctl-tumble {
   display: block;
 }
 
-/* zeichnung leeren nur im draw-modus */
-.ctl-draw {
-  display: none;
-}
-
-body.is-draw.ctx-flat .ctl-draw {
-  display: block;
-}
-
 /* —— buttons —— */
 
 .btn-grid {
