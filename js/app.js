@@ -251,9 +251,6 @@ function clearSeedCaretHideTimer() {
 function scheduleSeedCaretHide() {
   clearSeedCaretHideTimer();
   seedCaretHideTimer = window.setTimeout(() => {
-    const input = els.textField;
-    if (!input || input.value.length > 0) return;
-    if (document.activeElement !== input) return;
     seedCaretIdleHidden = true;
     els.seedCaret?.classList.add("is-off");
   }, SEED_CARET_IDLE_MS);
@@ -2776,7 +2773,7 @@ function updateSeedCaret(forceShow = false) {
   const caretLeft = (inputW - textW) / 2 + beforeW;
   caret.style.left = `${caretLeft}px`;
 
-  if (isEmpty) scheduleSeedCaretHide();
+  scheduleSeedCaretHide();
 }
 
 function bindSeedTextField() {
@@ -2801,14 +2798,10 @@ function bindSeedTextField() {
   input.addEventListener("click", () => updateSeedCaret(true));
   input.addEventListener("focus", () => {
     updateSeedCaret(true);
-    document.body.classList.add("is-text-focus");
-    syncVisualViewport();
     updateInputFontSize();
   });
   input.addEventListener("blur", () => {
     updateSeedCaret();
-    document.body.classList.remove("is-text-focus");
-    syncVisualViewport();
     updateInputFontSize();
   });
   document.addEventListener("selectionchange", () => {
@@ -3166,7 +3159,6 @@ window.addEventListener("keydown", (e) => {
 let lastSyncedSheetH = -1;
 function onMobileSheetLayoutChange() {
   syncMobileSheetHeight();
-  syncVisualViewport();
   const sheetH = getMobileSheetInset();
   updateInputFontSize();
   if (Math.abs(sheetH - lastSyncedSheetH) < 2) return;
@@ -3174,27 +3166,11 @@ function onMobileSheetLayoutChange() {
   if (p5i && state.input === "text") rebuildSim();
 }
 
-function syncVisualViewport() {
-  const vv = window.visualViewport;
-  const mobile = window.matchMedia("(max-width: 760px)").matches;
-  if (!vv || !mobile) {
-    document.documentElement.style.removeProperty("--vv-offset-top");
-    document.documentElement.style.removeProperty("--vv-height");
-    return;
-  }
-  document.documentElement.style.setProperty("--vv-offset-top", `${vv.offsetTop}px`);
-  document.documentElement.style.setProperty("--vv-height", `${vv.height}px`);
-}
-
 const sidePanelEl = document.querySelector(".side-panel");
 if (sidePanelEl && typeof ResizeObserver !== "undefined") {
   new ResizeObserver(onMobileSheetLayoutChange).observe(sidePanelEl);
 }
 window.addEventListener("resize", onMobileSheetLayoutChange);
-if (window.visualViewport) {
-  window.visualViewport.addEventListener("resize", onMobileSheetLayoutChange);
-  window.visualViewport.addEventListener("scroll", onMobileSheetLayoutChange);
-}
 onMobileSheetLayoutChange();
 
 /* ---- intro: differential growth, dann intro fährt nach oben weg ---- */

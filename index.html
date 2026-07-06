@@ -2,12 +2,12 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
   <title>weird growth — generative typografie</title>
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=73">
+  <link rel="stylesheet" href="css/style.css?v=77">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text ctx-flat" data-mode="lab2" data-ctx="flat" tabindex="-1">
@@ -124,15 +124,15 @@
           <input type="range" id="param-split" min="0" max="1" step="0.01" value="0.31">
         </label>
 
-        <p class="node-stats">
-          <span class="node-stats-label">nodes</span>
-          <output id="val-node-count" class="control-val">0 / 4000</output>
-        </p>
-
-        <label class="control" for="param-node-limit">
+        <label class="control ctl-node-limit" for="param-node-limit">
           <span class="control-head">limit <output id="val-node-limit" class="control-val">4000</output></span>
           <input type="range" id="param-node-limit" min="0" max="1" step="0.01" value="0.2">
         </label>
+
+        <p class="node-stats">
+          <span class="node-stats-label">nodes aktuell / limit</span>
+          <output id="val-node-count" class="control-val">0 / 4000</output>
+        </p>
 
         <label class="control ctl-link" for="param-link">
           <span class="control-head">verbindungen <output id="val-link" class="control-val">82 px</output></span>
@@ -183,6 +183,6 @@
   <script src="js/diff3d-growth.js?v=8"></script>
   <script src="js/dof-growth.js?v=11"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=233"></script>
+  <script src="js/app.js?v=236"></script>
 </body>
 </html>
