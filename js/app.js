@@ -1014,16 +1014,17 @@ function syncMobileSheetHeight() {
 }
 
 function getGrowthLayout(w, h) {
+  // stage/canvas-höhe schließt das mobile sheet bereits aus
   const sheetH = getMobileSheetInset();
-  const visibleH = Math.max(1, h - sheetH);
+  const visibleH = Math.max(1, h);
   return {
     w,
     h,
     sheetH,
     visibleH,
     measureW: w,
-    measureH: sheetH > 0 ? visibleH : h,
-    textCenterY: sheetH > 0 ? visibleH * 0.5 : h * 0.5,
+    measureH: visibleH,
+    textCenterY: visibleH * 0.5,
   };
 }
 
@@ -2253,25 +2254,27 @@ function countSimNodes() {
   return n;
 }
 
-function refreshDiff3MaxNodesLabel() {
-  if (!els.d3MaxNodes) return;
-  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.diff3d) : 4000;
-  const cur = sim && typeof sim.totalNodes === "function" ? sim.totalNodes() : 0;
-  els.d3MaxNodes.textContent = `${cur} / ${max}`;
-}
-
-function refreshDofMaxNodesLabel() {
-  if (!els.dofMaxNodes) return;
-  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.dof) : 4000;
-  const cur = state.mode === "dof" && sim && typeof sim.totalNodes === "function" ? sim.totalNodes() : 0;
-  els.dofMaxNodes.textContent = `${cur} / ${max}`;
+function refreshNodeCountLabel() {
+  const out = document.getElementById("val-node-count");
+  if (!out) return;
+  const st = activeParamState();
+  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(st) : 4000;
+  let cur = 0;
+  if (state.mode === "lab2") cur = countSimNodes();
+  else if (sim && typeof sim.totalNodes === "function") cur = sim.totalNodes();
+  out.textContent = `${cur} / ${max}`;
 }
 
 function refreshLab2MaxNodesLabel() {
-  if (!els.l2MaxNodes) return;
-  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.lab2) : 4000;
-  const cur = state.mode === "lab2" ? countSimNodes() : 0;
-  els.l2MaxNodes.textContent = `${cur} / ${max}`;
+  refreshNodeCountLabel();
+}
+
+function refreshDiff3MaxNodesLabel() {
+  refreshNodeCountLabel();
+}
+
+function refreshDofMaxNodesLabel() {
+  refreshNodeCountLabel();
 }
 
 function growthParams() {
@@ -2590,8 +2593,9 @@ const sketch = (p) => {
       }
     }
     if (sim && sim.draw) sim.draw();
-    if (state.mode === "lab2") refreshLab2MaxNodesLabel();
-    if (state.mode === "diff3d") refreshDiff3MaxNodesLabel();
+    if (state.mode === "lab2" || state.mode === "diff3d" || state.mode === "dof") {
+      refreshNodeCountLabel();
+    }
     // tinte nur sichtbar während des malens — danach nur wachstum
     if (state.input === "draw" && isDrawingStroke && drawG) {
       p.image(drawG, 0, 0);
@@ -2713,7 +2717,8 @@ function updateInputFontSize() {
   // (klein, hellgrau, helvetica)
 
   const w = els.sizer.offsetWidth;
-  const inputW = Math.min(Math.max(w + 8, size * 0.55), stage.width * 0.95);
+  const maxW = layout.measureW * 0.95;
+  const inputW = Math.min(Math.max(w + 8, size * 0.55), maxW);
   els.textField.style.width = `${inputW}px`;
   if (els.seedHint) {
     els.seedHint.hidden = !showingHint;
@@ -2794,8 +2799,18 @@ function bindSeedTextField() {
   });
   input.addEventListener("keyup", () => updateSeedCaret(true));
   input.addEventListener("click", () => updateSeedCaret(true));
-  input.addEventListener("focus", () => updateSeedCaret(true));
-  input.addEventListener("blur", () => updateSeedCaret());
+  input.addEventListener("focus", () => {
+    updateSeedCaret(true);
+    document.body.classList.add("is-text-focus");
+    syncVisualViewport();
+    updateInputFontSize();
+  });
+  input.addEventListener("blur", () => {
+    updateSeedCaret();
+    document.body.classList.remove("is-text-focus");
+    syncVisualViewport();
+    updateInputFontSize();
+  });
   document.addEventListener("selectionchange", () => {
     if (document.activeElement === input) updateSeedCaret();
   });
@@ -2881,6 +2896,7 @@ const PARAMS = {
   force: { id: "param-force", val: "val-force" },
   complexity: { id: "param-complexity", val: "val-complexity" },
   split: { id: "param-split", val: "val-split" },
+  nodeLimit: { id: "param-node-limit", val: "val-node-limit" },
   link: { id: "param-link", val: "val-link" },
   tumble: { id: "param-tumble", val: "val-tumble" },
 };
@@ -2931,6 +2947,7 @@ function paramConfig(mode) {
     force: { fmt: fmtPct, rebuild: false },
     complexity: { fmt: fmtComplexity, rebuild: mode === "lab2" },
     split: { fmt: (v) => fmtSplitFor(mode, v), rebuild: mode === "lab2" },
+    nodeLimit: { fmt: (v) => (typeof lab2NodeLimitFmt === "function" ? lab2NodeLimitFmt(v) : String(Math.round(2000 + v * 10000))), rebuild: false },
   };
   if (mode === "diff3d" || mode === "dof") {
     return {
@@ -2961,6 +2978,7 @@ Object.keys(PARAMS).forEach((key) => {
     const v = key === "force" ? st.force : st[key];
     const cfg = paramConfig(state.mode)[key];
     if (def.out && cfg) def.out.textContent = cfg.fmt(v);
+    if (key === "nodeLimit") refreshNodeCountLabel();
     if (cfg && cfg.rebuild) rebuildSim();
   });
 });
@@ -2977,14 +2995,17 @@ function syncForceUI() {
 function syncVersionUI() {
   const is3d = currentIs3d();
   if (ui.verSectionLabel) {
-    ui.verSectionLabel.textContent = is3d
-      ? "3d growth"
-      : (state.lab2.legacy ? "klassik" : "differential growth");
+    ui.verSectionLabel.textContent = "differential growth";
   }
   let activeVer;
   if (is3d) activeVer = state.mode === "dof" ? 1 : 2;
   else activeVer = state.lab2.legacy ? 1 : 2;
-  ui.verBtns.forEach((b) => b.classList.toggle("is-active", Number(b.dataset.ver) === activeVer));
+  ui.verBtns.forEach((b) => {
+    const ver = Number(b.dataset.ver);
+    b.textContent = `version ${ver}`;
+    b.setAttribute("aria-label", `Version ${ver}`);
+    b.classList.toggle("is-active", ver === activeVer);
+  });
   ui.navTabs.forEach((b) => {
     const nav = b.dataset.nav;
     let active = false;
@@ -3017,6 +3038,7 @@ function syncPanelForMode() {
   });
   syncVersionUI();
   syncNodesLabel();
+  refreshNodeCountLabel();
 }
 
 /* ---- topbar-nav: text / draw / 3D ---- */
@@ -3144,6 +3166,7 @@ window.addEventListener("keydown", (e) => {
 let lastSyncedSheetH = -1;
 function onMobileSheetLayoutChange() {
   syncMobileSheetHeight();
+  syncVisualViewport();
   const sheetH = getMobileSheetInset();
   updateInputFontSize();
   if (Math.abs(sheetH - lastSyncedSheetH) < 2) return;
@@ -3151,14 +3174,30 @@ function onMobileSheetLayoutChange() {
   if (p5i && state.input === "text") rebuildSim();
 }
 
+function syncVisualViewport() {
+  const vv = window.visualViewport;
+  const mobile = window.matchMedia("(max-width: 760px)").matches;
+  if (!vv || !mobile) {
+    document.documentElement.style.removeProperty("--vv-offset-top");
+    document.documentElement.style.removeProperty("--vv-height");
+    return;
+  }
+  document.documentElement.style.setProperty("--vv-offset-top", `${vv.offsetTop}px`);
+  document.documentElement.style.setProperty("--vv-height", `${vv.height}px`);
+}
+
 const sidePanelEl = document.querySelector(".side-panel");
 if (sidePanelEl && typeof ResizeObserver !== "undefined") {
   new ResizeObserver(onMobileSheetLayoutChange).observe(sidePanelEl);
 }
 window.addEventListener("resize", onMobileSheetLayoutChange);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener("resize", onMobileSheetLayoutChange);
+  window.visualViewport.addEventListener("scroll", onMobileSheetLayoutChange);
+}
 onMobileSheetLayoutChange();
 
-/* ---- intro: differential growth, dann normaler übergang (überblenden) ---- */
+/* ---- intro: differential growth, dann intro fährt nach oben weg ---- */
 function runIntro() {
   const intro = document.getElementById("intro");
   if (!intro) {
@@ -3183,7 +3222,7 @@ function runIntro() {
     }
   };
 
-  // normaler übergang: seite blendet ein, intro blendet aus. kein zoom.
+  // intro fährt nach oben weg; app liegt bereits darunter
   const startTransition = () => {
     if (transitioning) return;
     transitioning = true;
@@ -3191,7 +3230,7 @@ function runIntro() {
     state.paused = wasPaused;
     setPaused(wasPaused);
     intro.classList.add("leaving");
-    window.setTimeout(completeIntro, reduce ? 0 : 620);
+    window.setTimeout(completeIntro, reduce ? 0 : 680);
   };
 
   intro.addEventListener("click", () => {

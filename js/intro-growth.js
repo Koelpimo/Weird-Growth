@@ -1,6 +1,6 @@
 /**
- * Intro — differential growth aus keim-form. wächst weiter, dann normaler
- * (überblend-)übergang zur seite. kein zoom.
+ * Intro — differential growth aus keim-form. wächst weiter, dann fährt
+ * das intro nach oben weg (kein überblenden).
  */
 const IntroGrowth = (function () {
   const SIZE = 340;

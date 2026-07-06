@@ -2,17 +2,17 @@
 <html lang="de">
 <head>
   <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content">
   <title>weird growth — generative typografie</title>
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=68">
+  <link rel="stylesheet" href="css/style.css?v=73">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text ctx-flat" data-mode="lab2" data-ctx="flat" tabindex="-1">
 
-  <!-- intro: differential growth, zoom während wachstum -->
+  <!-- intro: differential growth, dann nach oben weg -->
   <div id="intro" class="intro">
     <div class="intro-inner">
       <h1 class="intro-word">weird growth</h1>
@@ -66,7 +66,7 @@
     <div class="panel-content">
 
       <section class="panel-block">
-        <h2 class="panel-label" id="ver-section-label">klassik</h2>
+        <h2 class="panel-label" id="ver-section-label">differential growth</h2>
         <div class="btn-grid version-toggle" role="group" aria-label="Version">
           <button type="button" class="panel-btn ver-btn is-active" data-ver="1">version 1</button>
           <button type="button" class="panel-btn ver-btn" data-ver="2">version 2</button>
@@ -83,10 +83,12 @@
           <button type="button" id="btn-play" class="panel-btn">pause</button>
           <button type="button" id="btn-reset" class="panel-btn btn-wide ctl-flat">neu wachsen</button>
           <button type="button" id="btn-clear" class="panel-btn btn-wide">leeren</button>
+          <button type="button" id="btn-svg" class="panel-btn">↓ svg</button>
+          <button type="button" id="btn-save" class="panel-btn">↓ png</button>
         </div>
       </section>
 
-      <section class="panel-block">
+      <section class="panel-block panel-block--params">
         <h2 class="panel-label">parameter</h2>
 
         <label class="control ctl-stroke" for="param-stroke">
@@ -122,6 +124,16 @@
           <input type="range" id="param-split" min="0" max="1" step="0.01" value="0.31">
         </label>
 
+        <p class="node-stats">
+          <span class="node-stats-label">nodes</span>
+          <output id="val-node-count" class="control-val">0 / 4000</output>
+        </p>
+
+        <label class="control" for="param-node-limit">
+          <span class="control-head">limit <output id="val-node-limit" class="control-val">4000</output></span>
+          <input type="range" id="param-node-limit" min="0" max="1" step="0.01" value="0.2">
+        </label>
+
         <label class="control ctl-link" for="param-link">
           <span class="control-head">verbindungen <output id="val-link" class="control-val">82 px</output></span>
           <input type="range" id="param-link" min="0" max="1" step="0.01" value="0.45">
@@ -131,14 +143,6 @@
           <span class="control-head">dreh-tempo <output id="val-tumble" class="control-val">35%</output></span>
           <input type="range" id="param-tumble" min="0" max="1" step="0.01" value="0.35">
         </label>
-      </section>
-
-      <section class="panel-block">
-        <h2 class="panel-label">export</h2>
-        <div class="btn-grid">
-          <button type="button" id="btn-svg" class="panel-btn">↓ svg</button>
-          <button type="button" id="btn-save" class="panel-btn">↓ png</button>
-        </div>
       </section>
 
     </div>
@@ -161,7 +165,7 @@
         linien können sich überlagern und wirken explosiver.</p>
         <p><b>modi:</b> <code>text</code> · <code>draw</code> · <code>3d</code>. panel rechts:
         tempo, pause, neu wachsen, liniendicke, kraft (anziehung ↔ abstoßung), komplexität, export als svg/png.</p>
-        <p><b>version 1 / 2:</b> in text &amp; draw — klassik vs. differential growth. in 3d:
+        <p><b>differential growth 1 / 2:</b> in text &amp; draw — zwei varianten desselben algorithmus. in 3d:
         web (kugel-guide) vs. growth (räumliches diff-growth).</p>
         <p class="modal-sources"><b>quellen &amp; weiterführend:</b></p>
         <ul class="modal-links">
@@ -179,6 +183,6 @@
   <script src="js/diff3d-growth.js?v=8"></script>
   <script src="js/dof-growth.js?v=11"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=229"></script>
+  <script src="js/app.js?v=233"></script>
 </body>
 </html>
