@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=77">
+  <link rel="stylesheet" href="css/style.css?v=78">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text ctx-flat" data-mode="lab2" data-ctx="flat" tabindex="-1">
@@ -76,7 +76,7 @@
       <section class="panel-block">
         <label class="control" for="param-speed">
           <span class="control-head">tempo <output id="val-speed" class="control-val">4.0×</output></span>
-          <input type="range" id="param-speed" min="0.2" max="8" step="0.1" value="4">
+          <input type="range" id="param-speed" min="0.2" max="8" step="0.1" value="4" autocomplete="off">
         </label>
         <div class="btn-grid">
           <button type="button" id="btn-nodes" class="panel-btn">nodes: aus</button>
@@ -93,40 +93,36 @@
 
         <label class="control ctl-stroke" for="param-stroke">
           <span class="control-head">liniendicke <output id="val-stroke" class="control-val">2 px</output></span>
-          <input type="range" id="param-stroke" min="0" max="1" step="0.01" value="0.1">
+          <input type="range" id="param-stroke" min="0" max="1" step="0.01" value="0.1" autocomplete="off">
         </label>
 
-        <div class="force-block">
-          <label class="control force-control" for="param-force" data-side="repulsion">
-            <span class="control-head">
-              <span class="force-title">kraft</span>
-              <output id="val-force" class="control-val">75% abstoßung</output>
-            </span>
-            <div class="force-slider">
-              <div class="force-track-wrap">
-                <input type="range" id="param-force" min="0" max="1" step="0.01" value="0.75">
-              </div>
-              <div class="force-ends" aria-hidden="true">
-                <span class="force-end force-end--left">anziehung</span>
-                <span class="force-end force-end--right is-active">abstoßung</span>
-              </div>
-            </div>
+        <label class="control force-control" for="param-force" data-side="repulsion">
+          <span class="control-head">
+            <span class="force-title">kraft</span>
+            <output id="val-force" class="control-val">75% abstoßung</output>
+          </span>
+          <input type="range" id="param-force" min="0" max="1" step="0.01" value="0.75" autocomplete="off">
+          <div class="force-ends" aria-hidden="true">
+            <span class="force-end force-end--left">anziehung</span>
+            <span class="force-end force-end--right is-active">abstoßung</span>
+          </div>
+        </label>
+
+        <div class="params-stack">
+          <label class="control" for="param-complexity">
+            <span class="control-head">komplexität <output id="val-complexity" class="control-val">~10</output></span>
+            <input type="range" id="param-complexity" min="0" max="1" step="0.01" value="0" autocomplete="off">
+          </label>
+
+          <label class="control" for="param-split">
+            <span class="control-head">neue node <output id="val-split" class="control-val">16 px</output></span>
+            <input type="range" id="param-split" min="0" max="1" step="0.01" value="0.31" autocomplete="off">
           </label>
         </div>
 
-        <label class="control" for="param-complexity">
-          <span class="control-head">komplexität <output id="val-complexity" class="control-val">~10</output></span>
-          <input type="range" id="param-complexity" min="0" max="1" step="0.01" value="0">
-        </label>
-
-        <label class="control" for="param-split">
-          <span class="control-head">neue node <output id="val-split" class="control-val">16 px</output></span>
-          <input type="range" id="param-split" min="0" max="1" step="0.01" value="0.31">
-        </label>
-
         <label class="control ctl-node-limit" for="param-node-limit">
           <span class="control-head">limit <output id="val-node-limit" class="control-val">4000</output></span>
-          <input type="range" id="param-node-limit" min="0" max="1" step="0.01" value="0.2">
+          <input type="range" id="param-node-limit" min="0" max="1" step="0.01" value="0.2" autocomplete="off">
         </label>
 
         <p class="node-stats">
@@ -136,12 +132,12 @@
 
         <label class="control ctl-link" for="param-link">
           <span class="control-head">verbindungen <output id="val-link" class="control-val">82 px</output></span>
-          <input type="range" id="param-link" min="0" max="1" step="0.01" value="0.45">
+          <input type="range" id="param-link" min="0" max="1" step="0.01" value="0.45" autocomplete="off">
         </label>
 
         <label class="control ctl-tumble" for="param-tumble">
           <span class="control-head">dreh-tempo <output id="val-tumble" class="control-val">35%</output></span>
-          <input type="range" id="param-tumble" min="0" max="1" step="0.01" value="0.35">
+          <input type="range" id="param-tumble" min="0" max="1" step="0.01" value="0.35" autocomplete="off">
         </label>
       </section>
 
@@ -183,6 +179,6 @@
   <script src="js/diff3d-growth.js?v=8"></script>
   <script src="js/dof-growth.js?v=11"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=236"></script>
+  <script src="js/app.js?v=237"></script>
 </body>
 </html>

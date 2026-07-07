@@ -161,27 +161,6 @@ const DISPLAY_FONT = "Astloch";
 const UI_FONT = "Helvetica Neue";
 const UI_FONT_STACK = `"${UI_FONT}", Helvetica, Arial, sans-serif`;
 const FONT_STACK = `"${DISPLAY_FONT}", Georgia, "Times New Roman", serif`;
-const STORAGE_KEY_SPEED = "weirdgrowth-speed";
-
-function loadSpeedFromStorage() {
-  try {
-    const raw = localStorage.getItem(STORAGE_KEY_SPEED);
-    if (raw == null) return;
-    const v = parseFloat(raw);
-    if (Number.isFinite(v)) state.speed = clamp(v, 0.2, 8);
-  } catch (err) {
-    /* ignore */
-  }
-}
-
-function saveSpeedToStorage() {
-  try {
-    localStorage.setItem(STORAGE_KEY_SPEED, String(state.speed));
-  } catch (err) {
-    /* ignore */
-  }
-}
-
 function syncSpeedUI() {
   if (!els.speed || !els.speedVal) return;
   els.speed.value = String(state.speed);
@@ -3070,7 +3049,6 @@ if (ui.speed) {
   ui.speed.addEventListener("input", () => {
     state.speed = parseFloat(ui.speed.value);
     syncSpeedUI();
-    saveSpeedToStorage();
   });
 }
 
@@ -3240,8 +3218,13 @@ async function loadDisplayFonts() {
 }
 
 loadDisplayFonts().then(() => {
-  loadSpeedFromStorage();
+  try {
+    localStorage.removeItem("weirdgrowth-speed");
+  } catch (err) {
+    /* ignore */
+  }
   syncSpeedUI();
+  syncPanelForMode();
   setMode(state.mode);
   setInput(state.input);
   updateInputFontSize();
