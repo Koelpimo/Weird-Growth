@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=83">
+  <link rel="stylesheet" href="css/style.css?v=85">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text ctx-flat" data-mode="lab2" data-ctx="flat" tabindex="-1">
@@ -161,14 +161,35 @@
         Nodes zu weit auseinander sind, entsteht eine neue Node zwischen diesen. So wächst eine Struktur,
         die sich langsam ausdehnt, und ein organisches System entsteht.</p>
 
-        <ul class="modal-params-compact">
-          <li><b>Liniendicke</b> — Stärke der Linien in Pixeln.</li>
-          <li><b>Kraft</b> — Anziehung: Nodes rücken zusammen · Abstoßung: Nodes weichen aus.</li>
-          <li><b>Komplexität</b> — Feinheit der Start-Kontur (~10 grob, ~100 fein).</li>
-          <li><b>Neue Node</b> — Abstand für Kantenteilung (2–16 px); kleiner = dichter, größer = grober.</li>
-          <li><b>Limit</b> — Max. Nodes (2000–12000); Schutz vor Überlastung.</li>
-          <li><b>Verbindungen</b> <span class="modal-tag">3D</span> — Verbindungsreichweite im Raum.</li>
-        </ul>
+        <div class="modal-params-box">
+          <p class="modal-params-label">parameter</p>
+          <ul class="modal-params-compact">
+            <li>
+              <span class="modal-param-term"><b>Liniendicke</b></span>
+              <span class="modal-param-desc">Stärke der Linien in Pixeln.</span>
+            </li>
+            <li>
+              <span class="modal-param-term"><b>Kraft</b></span>
+              <span class="modal-param-desc">Anziehung: Nodes rücken zusammen · Abstoßung: Nodes weichen aus.</span>
+            </li>
+            <li>
+              <span class="modal-param-term"><b>Komplexität</b></span>
+              <span class="modal-param-desc">Feinheit der Start-Kontur (~10 grob, ~100 fein).</span>
+            </li>
+            <li>
+              <span class="modal-param-term"><b>Neue Node</b></span>
+              <span class="modal-param-desc">Abstand für Kantenteilung (2–16 px); kleiner = dichter, größer = grober.</span>
+            </li>
+            <li>
+              <span class="modal-param-term"><b>Limit</b></span>
+              <span class="modal-param-desc">Max. Nodes (2000–12000); Schutz vor Überlastung.</span>
+            </li>
+            <li>
+              <span class="modal-param-term"><b>Verbindungen</b> <span class="modal-tag">3D</span></span>
+              <span class="modal-param-desc">Verbindungsreichweite im Raum.</span>
+            </li>
+          </ul>
+        </div>
 
         <p class="modal-sources"><b>Quellen &amp; Inspiration</b></p>
         <ul class="modal-links">

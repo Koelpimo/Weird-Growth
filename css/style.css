@@ -715,26 +715,71 @@ body.ctx-3d .ctl-tumble {
   margin-bottom: 0;
 }
 
+.modal-params-box {
+  margin: 0.1rem 0 1rem;
+  padding: 0.55rem 0.65rem 0.6rem;
+  background: #f2f2f2;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+}
+
+.modal-params-label {
+  margin: 0 0 0.35rem;
+  font-size: 0.68rem;
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: 0.06em;
+  text-transform: lowercase;
+  color: var(--muted);
+}
+
 .modal-params-compact {
-  margin: 0 0 0.95rem;
+  margin: 0;
   padding: 0;
   list-style: none;
-  line-height: 1.55;
+  font-size: 0.8rem;
+  line-height: 1.38;
 }
 
 .modal-params-compact li {
-  margin-bottom: 0.38rem;
+  display: grid;
+  grid-template-columns: 8.4rem 1fr;
+  column-gap: 0.55rem;
+  align-items: baseline;
+  margin-bottom: 0.22rem;
 }
 
 .modal-params-compact li:last-child {
   margin-bottom: 0;
 }
 
+.modal-param-term {
+  flex-shrink: 0;
+  white-space: nowrap;
+}
+
+.modal-param-term b {
+  font-weight: var(--ui-weight-strong);
+  font-size: 0.78rem;
+  letter-spacing: 0.015em;
+}
+
+.modal-param-desc {
+  min-width: 0;
+  color: var(--fg);
+}
+
 .modal-tag {
-  font-size: 0.72rem;
+  display: inline-block;
+  margin: 0 0.08rem;
+  padding: 0.02rem 0.28rem;
+  font-size: 0.62rem;
   font-weight: var(--ui-weight-strong);
   color: var(--muted);
-  letter-spacing: 0.04em;
+  letter-spacing: 0.05em;
+  border: 1px solid var(--hair);
+  border-radius: var(--radius);
+  background: var(--bg);
+  vertical-align: baseline;
 }
 
 /* ============================================================
