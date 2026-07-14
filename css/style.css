@@ -380,10 +380,19 @@ body:not(.entered) .text-layer {
 .panel-block--params > .panel-label,
 .panel-block--params > .force-control,
 .panel-block--params > .params-stack,
+.panel-block--params > .ctl-3d-params,
 .panel-block--params > .node-stats,
 .panel-block--params > .ctl-stroke,
 .panel-block--params > .ctl-node-limit {
   grid-column: 1 / -1;
+}
+
+.ctl-3d-params {
+  display: none;
+}
+
+body.ctx-3d .ctl-3d-params {
+  display: flex;
 }
 
 .panel-block:last-child {
@@ -525,11 +534,7 @@ input[type="range"]::-moz-range-thumb {
   background: var(--bg);
 }
 
-/* stroke nur flach, verbindungen/dreh-tempo nur 3d */
-body.ctx-3d .ctl-stroke {
-  display: none;
-}
-
+/* stroke nur flach verstecken: nicht mehr — auch in 3d sichtbar */
 body.ctx-3d .ctl-flat {
   display: none;
 }
@@ -708,6 +713,28 @@ body.ctx-3d .ctl-tumble {
 
 .modal-links li:last-child {
   margin-bottom: 0;
+}
+
+.modal-params-compact {
+  margin: 0 0 0.95rem;
+  padding: 0;
+  list-style: none;
+  line-height: 1.55;
+}
+
+.modal-params-compact li {
+  margin-bottom: 0.38rem;
+}
+
+.modal-params-compact li:last-child {
+  margin-bottom: 0;
+}
+
+.modal-tag {
+  font-size: 0.72rem;
+  font-weight: var(--ui-weight-strong);
+  color: var(--muted);
+  letter-spacing: 0.04em;
 }
 
 /* ============================================================
@@ -922,5 +949,38 @@ body.entered .stage {
   .panel-btn {
     padding: 0.32rem 0.4rem;
     font-size: 0.68rem;
+  }
+}
+
+/* performance-hinweis bei automatischem stopp */
+.perf-toast {
+  position: fixed;
+  left: 50%;
+  bottom: max(1.1rem, var(--safe-bottom));
+  transform: translateX(-50%) translateY(0.65rem);
+  z-index: 55;
+  max-width: min(30rem, calc(100vw - 2rem));
+  padding: 0.58rem 0.9rem;
+  background: var(--fg);
+  color: var(--bg);
+  font-family: var(--font-ui);
+  font-size: 0.72rem;
+  font-weight: var(--ui-weight);
+  letter-spacing: var(--ui-tracking);
+  text-transform: lowercase;
+  border-radius: var(--radius);
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.35s var(--ease), transform 0.35s var(--ease);
+}
+
+.perf-toast.is-visible {
+  opacity: 1;
+  transform: translateX(-50%) translateY(0);
+}
+
+@media (max-width: 900px) {
+  .perf-toast {
+    bottom: calc(min(46dvh, calc(100dvh - var(--top-h) - var(--safe-top) - 0.8rem)) + max(0.85rem, var(--safe-bottom)));
   }
 }

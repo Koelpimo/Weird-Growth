@@ -498,7 +498,7 @@ const DofGrowthMode = {
         }
 
         const showNodes = !!state.dof.showNodes || nodes.length < 4;
-        diff3DrawGraph(p, nodes, edges, cam, showNodes, 2);
+        diff3DrawGraph(p, nodes, edges, cam, showNodes, lab2StrokeWidth(state.dof.stroke));
       },
 
       addNodeAtScreen(sx, sy) {
@@ -530,7 +530,7 @@ const DofGrowthMode = {
       },
 
       get strokeW() {
-        return 1.5;
+        return lab2StrokeWidth(state.dof.stroke);
       },
 
       totalNodes() {

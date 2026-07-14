@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=78">
+  <link rel="stylesheet" href="css/style.css?v=83">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text ctx-flat" data-mode="lab2" data-ctx="flat" tabindex="-1">
@@ -68,8 +68,8 @@
       <section class="panel-block">
         <h2 class="panel-label" id="ver-section-label">differential growth</h2>
         <div class="btn-grid version-toggle" role="group" aria-label="Version">
-          <button type="button" class="panel-btn ver-btn is-active" data-ver="1">version 1</button>
-          <button type="button" class="panel-btn ver-btn" data-ver="2">version 2</button>
+          <button type="button" class="panel-btn ver-btn is-active" data-ver="1">rund</button>
+          <button type="button" class="panel-btn ver-btn" data-ver="2">eckig</button>
         </div>
       </section>
 
@@ -120,24 +120,26 @@
           </label>
         </div>
 
-        <label class="control ctl-node-limit" for="param-node-limit">
-          <span class="control-head">limit <output id="val-node-limit" class="control-val">4000</output></span>
-          <input type="range" id="param-node-limit" min="0" max="1" step="0.01" value="0.2" autocomplete="off">
-        </label>
-
         <p class="node-stats">
           <span class="node-stats-label">nodes aktuell / limit</span>
           <output id="val-node-count" class="control-val">0 / 4000</output>
         </p>
 
-        <label class="control ctl-link" for="param-link">
-          <span class="control-head">verbindungen <output id="val-link" class="control-val">82 px</output></span>
-          <input type="range" id="param-link" min="0" max="1" step="0.01" value="0.45" autocomplete="off">
-        </label>
+        <div class="params-stack ctl-3d-params">
+          <label class="control ctl-link" for="param-link">
+            <span class="control-head">verbindungen <output id="val-link" class="control-val">82 px</output></span>
+            <input type="range" id="param-link" min="0" max="1" step="0.01" value="0.45" autocomplete="off">
+          </label>
 
-        <label class="control ctl-tumble" for="param-tumble">
-          <span class="control-head">dreh-tempo <output id="val-tumble" class="control-val">35%</output></span>
-          <input type="range" id="param-tumble" min="0" max="1" step="0.01" value="0.35" autocomplete="off">
+          <label class="control ctl-tumble" for="param-tumble">
+            <span class="control-head">dreh-tempo <output id="val-tumble" class="control-val">35%</output></span>
+            <input type="range" id="param-tumble" min="0" max="1" step="0.01" value="0.35" autocomplete="off">
+          </label>
+        </div>
+
+        <label class="control ctl-node-limit" for="param-node-limit">
+          <span class="control-head">limit <output id="val-node-limit" class="control-val">4000</output></span>
+          <input type="range" id="param-node-limit" min="0" max="1" step="0.01" value="0.2" autocomplete="off">
         </label>
       </section>
 
@@ -152,22 +154,27 @@
         <button type="button" class="modal-close" id="btn-info-close" aria-label="Schließen">×</button>
       </div>
       <div class="modal-body">
-        <p><b>weird growth</b> — generative typografie. text oder zeichnung ist die keimform;
-        daraus wächst ein organisches liniennetz.</p>
-        <p><b>differential growth</b> startet als geschlossene kontur mit nodes entlang der linie.
-        nodes, die zu dicht liegen, stoßen sich ab — die form dehnt sich aus. wo lücken entstehen,
-        teilt sich die linie und neue nodes entstehen. so wächst die struktur langsam nach außen,
-        ohne sich beliebig zu überkreuzen (version 2). version 1 (klassik) nutzt ältere physik —
-        linien können sich überlagern und wirken explosiver.</p>
-        <p><b>modi:</b> <code>text</code> · <code>draw</code> · <code>3d</code>. panel rechts:
-        tempo, pause, neu wachsen, liniendicke, kraft (anziehung ↔ abstoßung), komplexität, export als svg/png.</p>
-        <p><b>differential growth 1 / 2:</b> in text &amp; draw — zwei varianten desselben algorithmus. in 3d:
-        web (kugel-guide) vs. growth (räumliches diff-growth).</p>
-        <p class="modal-sources"><b>quellen &amp; weiterführend:</b></p>
+        <p><b>Weird Growth</b> ist ein System, das Differential Growth darstellt — ein Wachstumsmodell,
+        das an verschiedenen Orten in der Biologie vorzufinden ist, wie zum Beispiel beim Wachstum von Pflanzen.</p>
+        <p>Das Wachstum beginnt mit einer geschlossenen Kontur oder Linie. Darauf sind Nodes platziert,
+        die sich abstoßen, wenn sie zu nah aneinander liegen — wodurch sich die Form ausdehnt. Sobald die
+        Nodes zu weit auseinander sind, entsteht eine neue Node zwischen diesen. So wächst eine Struktur,
+        die sich langsam ausdehnt, und ein organisches System entsteht.</p>
+
+        <ul class="modal-params-compact">
+          <li><b>Liniendicke</b> — Stärke der Linien in Pixeln.</li>
+          <li><b>Kraft</b> — Anziehung: Nodes rücken zusammen · Abstoßung: Nodes weichen aus.</li>
+          <li><b>Komplexität</b> — Feinheit der Start-Kontur (~10 grob, ~100 fein).</li>
+          <li><b>Neue Node</b> — Abstand für Kantenteilung (2–16 px); kleiner = dichter, größer = grober.</li>
+          <li><b>Limit</b> — Max. Nodes (2000–12000); Schutz vor Überlastung.</li>
+          <li><b>Verbindungen</b> <span class="modal-tag">3D</span> — Verbindungsreichweite im Raum.</li>
+        </ul>
+
+        <p class="modal-sources"><b>Quellen &amp; Inspiration</b></p>
         <ul class="modal-links">
-          <li><a href="https://inconvergent.net/2016/shepherding-random-growth/" target="_blank" rel="noopener noreferrer">inconvergent — shepherding random growth</a> — grundlegende erklärung des algorithmus: zufällige keimform, abstoßung zwischen nodes, wachstum durch splits. basis für version 2.</li>
-          <li><a href="https://typereactor.xyz/" target="_blank" rel="noopener noreferrer">typereactor</a> — inspiration für generative typografie: buchstaben als lebendige, wachsende formen.</li>
-          <li><a href="https://www.youtube.com/watch?v=1viK2qKuP-Y" target="_blank" rel="noopener noreferrer">youtube — code tutorial</a> — schritt-für-schritt-implementierung von differential growth in code (p5.js / processing).</li>
+          <li><a href="https://inconvergent.net/2016/shepherding-random-growth/" target="_blank" rel="noopener noreferrer">inconvergent — shepherding random growth</a> — grundlegende Erklärung des Algorithmus.</li>
+          <li><a href="https://www.youtube.com/watch?v=1viK2qKuP-Y" target="_blank" rel="noopener noreferrer">YouTube — Code Tutorial</a> — p5.js Code-Tutorial für den Differential-Growth-Algorithmus.</li>
+          <li><a href="https://typereactor.xyz/" target="_blank" rel="noopener noreferrer">TypeReactor</a> — Inspiration für generative Typografie.</li>
         </ul>
       </div>
     </div>
@@ -176,9 +183,13 @@
   <script src="js/lab-growth.js?v=9"></script>
   <script src="js/lab2-growth.js?v=30"></script>
   <script src="js/intro-growth.js?v=11"></script>
-  <script src="js/diff3d-growth.js?v=8"></script>
-  <script src="js/dof-growth.js?v=11"></script>
+  <script src="js/diff3d-growth.js?v=9"></script>
+  <script src="js/dof-growth.js?v=12"></script>
   <script src="js/reactor-growth.js?v=6"></script>
-  <script src="js/app.js?v=237"></script>
+  <div id="perf-toast" class="perf-toast" role="status" aria-live="polite" hidden>
+    <span class="perf-toast-text"></span>
+  </div>
+
+  <script src="js/app.js?v=241"></script>
 </body>
 </html>

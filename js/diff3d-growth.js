@@ -615,7 +615,7 @@ const Diff3GrowthMode = {
           return;
         }
 
-        diff3DrawGraph(p, nodes, edges, cam, !!state.diff3d.showNodes, 2);
+        diff3DrawGraph(p, nodes, edges, cam, !!state.diff3d.showNodes, lab2StrokeWidth(state.diff3d.stroke));
       },
 
       addNodeAtScreen(sx, sy) {
@@ -647,7 +647,7 @@ const Diff3GrowthMode = {
       },
 
       get strokeW() {
-        return 1.5;
+        return lab2StrokeWidth(state.diff3d.stroke);
       },
 
       totalNodes() {

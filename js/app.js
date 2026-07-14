@@ -124,6 +124,7 @@ const state = {
     split: 0.5, // ~31 px teilungs-abstand
   },
   diff3d: {
+    stroke: 0.1,
     force: 0.75,
     attraction: 0.25,
     repulsion: 0.75,
@@ -142,6 +143,7 @@ const state = {
     showNodes: false,
   },
   dof: {
+    stroke: 0.1,
     force: 0.75,
     attraction: 0.25,
     repulsion: 0.75,
@@ -213,9 +215,16 @@ let sim = null;
 /* stabilitäts-wächter: bei anhaltend niedriger framerate wird das aktuelle
    objekt automatisch vom canvas gelöscht (schutz vor einfrieren). */
 const STABILITY_MIN_FPS = 18;
+const STABILITY_MIN_FPS_3D = 20;
+const STABILITY_MAX_FRAME_MS = 72; // ~14 fps pro frame
+const STABILITY_MAX_FRAME_MS_3D = 58; // ~17 fps pro frame in 3d
 const STABILITY_TRIP_FRAMES = 45; // ~0.75s durchgehend zu langsam
 const STABILITY_WARMUP_FRAMES = 60; // erst nach kurzer aufwärmphase prüfen
+const STABILITY_COOLDOWN_FRAMES = 180; // nach notfall-stopp kurz nicht erneut auslösen
 let lowFpsFrames = 0;
+let stabilityLastMs = 0;
+let emergencyCooldown = 0;
+let perfToastHideTimer = null;
 let seedCaretHideTimer = null;
 let seedCaretIdleHidden = false;
 const SEED_CARET_IDLE_MS = 3000;
@@ -233,6 +242,40 @@ function scheduleSeedCaretHide() {
     seedCaretIdleHidden = true;
     els.seedCaret?.classList.add("is-off");
   }, SEED_CARET_IDLE_MS);
+}
+
+function is3dMode() {
+  return state.mode === "diff3d" || state.mode === "dof";
+}
+
+function stabilityMinFps() {
+  return is3dMode() ? STABILITY_MIN_FPS_3D : STABILITY_MIN_FPS;
+}
+
+function stabilityMaxFrameMs() {
+  return is3dMode() ? STABILITY_MAX_FRAME_MS_3D : STABILITY_MAX_FRAME_MS;
+}
+
+function hasActiveGrowth() {
+  if (sim && typeof sim.totalNodes === "function" && sim.totalNodes() > 0) return true;
+  if (state.input === "draw" && isDrawingStroke) return true;
+  return false;
+}
+
+function showPerfNotice(message) {
+  const root = document.getElementById("perf-toast");
+  const text = root?.querySelector(".perf-toast-text");
+  if (!root || !text) return;
+  text.textContent = message;
+  root.hidden = false;
+  root.classList.add("is-visible");
+  if (perfToastHideTimer) window.clearTimeout(perfToastHideTimer);
+  perfToastHideTimer = window.setTimeout(() => {
+    root.classList.remove("is-visible");
+    perfToastHideTimer = window.setTimeout(() => {
+      root.hidden = true;
+    }, 380);
+  }, 5200);
 }
 
 function clearCanvas() {
@@ -260,8 +303,18 @@ function clearCanvas() {
 }
 
 function emergencyClear() {
+  if (emergencyCooldown > 0) return;
+  emergencyCooldown = STABILITY_COOLDOWN_FRAMES;
+  const in3d = is3dMode();
   clearCanvas();
+  setPaused(true);
   lowFpsFrames = 0;
+  stabilityLastMs = 0;
+  showPerfNotice(
+    in3d
+      ? "performance zu niedrig — 3d-wachstum automatisch gestoppt"
+      : "performance zu niedrig — wachstum automatisch gestoppt"
+  );
 }
 
 function clamp(v, lo, hi) {
@@ -2554,12 +2607,23 @@ const sketch = (p) => {
   };
 
   p.draw = () => {
+    const nowMs = performance.now();
+    const frameMs = stabilityLastMs > 0 ? nowMs - stabilityLastMs : 0;
+    stabilityLastMs = nowMs;
+    if (emergencyCooldown > 0) emergencyCooldown--;
+
     if (!state.paused && sim && sim.update) {
       sim.update();
-      // stabilitäts-wächter — nur bei aktivem, laufendem wachstum
-      if (document.body.classList.contains("entered") && p.frameCount > STABILITY_WARMUP_FRAMES) {
+      // stabilitäts-wächter — nur bei aktivem, laufendem wachstum (inkl. 3d)
+      if (
+        document.body.classList.contains("entered") &&
+        p.frameCount > STABILITY_WARMUP_FRAMES &&
+        hasActiveGrowth()
+      ) {
         const fps = p.frameRate();
-        if (fps > 0 && fps < STABILITY_MIN_FPS) {
+        const slowFps = fps > 0 && fps < stabilityMinFps();
+        const slowFrame = frameMs > stabilityMaxFrameMs();
+        if (slowFps || slowFrame) {
           lowFpsFrames++;
           if (lowFpsFrames >= STABILITY_TRIP_FRAMES) emergencyClear();
         } else if (lowFpsFrames > 0) {
@@ -2924,6 +2988,7 @@ function paramConfig(mode) {
   if (mode === "diff3d" || mode === "dof") {
     return {
       ...common,
+      stroke: { fmt: lab2StrokeFmt, rebuild: false },
       link: { fmt: mode === "dof" ? dofLinkFmt : diff3LinkFmt, rebuild: false },
       tumble: { fmt: mode === "dof" ? dofTumbleFmt : diff3TumbleFmt, rebuild: false },
     };
@@ -2964,6 +3029,9 @@ function syncForceUI() {
   syncForceEndLabels(forceSide(st));
 }
 
+const FLAT_VERSION_LABELS = { 1: "rund", 2: "eckig" };
+const THREE_VERSION_LABELS = { 1: "globe", 2: "mesh" };
+
 function syncVersionUI() {
   const is3d = currentIs3d();
   if (ui.verSectionLabel) {
@@ -2974,8 +3042,10 @@ function syncVersionUI() {
   else activeVer = state.lab2.legacy ? 1 : 2;
   ui.verBtns.forEach((b) => {
     const ver = Number(b.dataset.ver);
-    b.textContent = `version ${ver}`;
-    b.setAttribute("aria-label", `Version ${ver}`);
+    const labels = is3d ? THREE_VERSION_LABELS : FLAT_VERSION_LABELS;
+    const label = labels[ver] || `version ${ver}`;
+    b.textContent = label;
+    b.setAttribute("aria-label", label);
     b.classList.toggle("is-active", ver === activeVer);
   });
   ui.navTabs.forEach((b) => {
@@ -3091,12 +3161,14 @@ if (ui.clear) {
 }
 
 /* ---- export ---- */
-const MODE_FILE_NAMES = { lab2: "differential-growth", diff3d: "3d-growth", dof: "3d-web" };
+const MODE_FILE_NAMES = { lab2: "differential-growth", diff3d: "mesh", dof: "globe" };
 if (ui.save) {
   ui.save.addEventListener("click", () => {
     const name =
-      state.mode === "lab2" && state.lab2.legacy
-        ? "klassik"
+      state.mode === "lab2"
+        ? state.lab2.legacy
+          ? "rund"
+          : "eckig"
         : MODE_FILE_NAMES[state.mode] || state.mode;
     if (p5i) p5i.saveCanvas(`weirdgrowth-${name}-${Date.now()}`, "png");
   });
