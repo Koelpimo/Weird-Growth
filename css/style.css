@@ -715,6 +715,34 @@ body.ctx-3d .ctl-tumble {
   margin-bottom: 0;
 }
 
+.modal-legacy {
+  margin: 1.1rem 0 0;
+  font-size: 0.62rem;
+  letter-spacing: 0.05em;
+}
+
+.modal-legacy a {
+  color: var(--muted);
+  text-decoration: none;
+  opacity: 0.2;
+  transition: opacity 0.2s ease;
+}
+
+.modal-legacy a:hover,
+.modal-legacy a:focus-visible {
+  opacity: 0.55;
+  text-decoration: underline;
+  text-underline-offset: 0.14em;
+}
+
+.modal-credit {
+  margin: 0.85rem 0 0.15rem;
+  font-size: 0.82rem;
+  letter-spacing: 0.04em;
+  color: var(--fg);
+  opacity: 0.55;
+}
+
 .modal-params-box {
   margin: 0.1rem 0 1rem;
   padding: 0.55rem 0.65rem 0.6rem;
