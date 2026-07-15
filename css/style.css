@@ -696,19 +696,22 @@ body.ctx-3d .ctl-tumble {
 
 .modal-sources {
   margin-top: 0.15rem;
-  margin-bottom: 0.35rem;
-  padding-top: 0.75rem;
+  margin-bottom: 0.2rem;
+  padding-top: 0.5rem;
   border-top: 1px solid var(--hair);
+  font-size: 0.92rem;
+  line-height: 1.45;
 }
 
 .modal-links {
   margin: 0;
   padding-left: 1.05rem;
-  line-height: 1.7;
+  line-height: 1.45;
+  font-size: 0.88rem;
 }
 
 .modal-links li {
-  margin-bottom: 0.75rem;
+  margin-bottom: 0.4rem;
 }
 
 .modal-links li:last-child {
