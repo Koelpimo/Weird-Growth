@@ -612,7 +612,7 @@ body.ctx-3d .ctl-tumble {
 
 .modal-window {
   width: min(46rem, 94vw);
-  max-height: 88vh;
+  max-height: none;
   display: flex;
   flex-direction: column;
   background: var(--bg);
@@ -658,7 +658,7 @@ body.ctx-3d .ctl-tumble {
 
 .modal-body {
   padding: 1.35rem 1.45rem 1.55rem;
-  overflow-y: auto;
+  overflow: visible;
   font-family: var(--font-ui);
   font-size: 0.98rem;
   font-weight: var(--ui-weight);
@@ -971,7 +971,7 @@ body.entered .stage {
 
   .modal-window {
     width: min(100%, 96vw);
-    max-height: calc(100dvh - 1.3rem);
+    max-height: none;
     box-shadow: 4px 4px 0 var(--fg);
   }
 
