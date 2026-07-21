@@ -7,7 +7,7 @@
   <link rel="icon" href="favicon-32.png?v=2" sizes="32x32" type="image/png">
   <link rel="icon" href="favicon.png?v=2" type="image/png">
   <link rel="apple-touch-icon" href="apple-touch-icon.png?v=2">
-  <link rel="stylesheet" href="css/style.css?v=99">
+  <link rel="stylesheet" href="css/style.css?v=105">
   <script src="js/lib/p5.min.js"></script>
 </head>
 <body class="is-text ctx-flat" data-mode="lab2" data-ctx="flat" tabindex="-1">
@@ -28,6 +28,7 @@
     <nav class="nav" aria-label="Modus">
       <button type="button" class="nav-tab is-active" data-nav="text">text</button>
       <button type="button" class="nav-tab" data-nav="draw">draw</button>
+      <button type="button" class="nav-tab" data-nav="border">border</button>
       <button type="button" class="nav-tab" data-nav="3d">3D</button>
     </nav>
     <button type="button" class="info-btn" id="btn-info" aria-label="Info">i</button>
@@ -85,6 +86,35 @@
           <button type="button" id="btn-clear" class="panel-btn btn-wide">leeren</button>
           <button type="button" id="btn-svg" class="panel-btn">↓ svg</button>
           <button type="button" id="btn-save" class="panel-btn">↓ png</button>
+        </div>
+      </section>
+
+      <section class="panel-block ctl-border" aria-label="Border-Werkzeuge">
+        <h2 class="panel-label">border</h2>
+        <div class="btn-grid border-tool-grid" role="group" aria-label="Form">
+          <button type="button" class="panel-btn border-icon-btn border-shape-btn is-active" data-border-shape="rect" aria-label="Rechteck" title="rechteck">
+            <svg class="border-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <rect x="4.5" y="5.5" width="15" height="13" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            </svg>
+          </button>
+          <button type="button" class="panel-btn border-icon-btn border-shape-btn" data-border-shape="circle" aria-label="Kreis" title="kreis">
+            <svg class="border-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <circle cx="12" cy="12" r="7.25" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            </svg>
+          </button>
+          <button type="button" class="panel-btn border-icon-btn border-tool-btn btn-wide" data-border-tool="paint" id="btn-border-paint" aria-label="Malen" title="malen">
+            <svg class="border-tool-icon" viewBox="0 0 24 24" aria-hidden="true">
+              <path d="M14.7 4.3l5 5-9.8 9.8H4.9v-5l9.8-9.8z" fill="none" stroke="currentColor" stroke-width="1.75" stroke-linejoin="round"/>
+              <path d="M12.8 6.2l5 5" fill="none" stroke="currentColor" stroke-width="1.75"/>
+            </svg>
+          </button>
+        </div>
+        <p class="border-pf-label">pathfinder</p>
+        <div class="btn-grid border-pf-grid" role="group" aria-label="Pathfinder">
+          <button type="button" class="panel-btn border-pf-btn is-active" data-border-pf="unite">vereinen</button>
+          <button type="button" class="panel-btn border-pf-btn" data-border-pf="minus">aussparen</button>
+          <button type="button" class="panel-btn border-pf-btn" data-border-pf="intersect">schneiden</button>
+          <button type="button" class="panel-btn border-pf-btn" data-border-pf="exclude">ausschließen</button>
         </div>
       </section>
 
@@ -200,14 +230,14 @@
           <li><a href="https://typereactor.xyz/" target="_blank" rel="noopener noreferrer">TypeReactor</a> — Inspiration für generative Typografie.</li>
         </ul>
         <p class="modal-legacy">
-          <a href="http://localhost:8765/" tabindex="0">Gestaltungstools · legacy website</a>
+          <a href="legacy/" tabindex="0">Gestaltungstools · legacy website</a>
         </p>
       </div>
     </div>
   </div>
 
   <script src="js/lab-growth.js?v=9"></script>
-  <script src="js/lab2-growth.js?v=30"></script>
+  <script src="js/lab2-growth.js?v=32"></script>
   <script src="js/intro-growth.js?v=11"></script>
   <script src="js/diff3d-growth.js?v=9"></script>
   <script src="js/dof-growth.js?v=12"></script>
@@ -216,6 +246,6 @@
     <span class="perf-toast-text"></span>
   </div>
 
-  <script src="js/app.js?v=241"></script>
+  <script src="js/app.js?v=247"></script>
 </body>
 </html>

@@ -346,8 +346,6 @@ function lab2UpdateNode(node, lineNodes, neighbors, bounds, margin, factor, line
   [node.vx, node.vy] = lab2LimitVec(node.vx, node.vy, node.maxSpeed);
   node.vx *= 0.93;
   node.vy *= 0.93;
-  const prevX = node.x;
-  const prevY = node.y;
   node.x += node.vx * factor;
   node.y += node.vy * factor;
   node.ax = 0;
@@ -371,8 +369,6 @@ function lab2UpdateNode(node, lineNodes, neighbors, bounds, margin, factor, line
     node.y = top;
     if (node.vy < 0) node.vy = 0;
   }
-
-  if (typeof lab2ContainNode === "function") lab2ContainNode(node, prevX, prevY);
 }
 
 function lab2InsertLine(nodes, insertDistance, budget) {
@@ -386,12 +382,8 @@ function lab2InsertLine(nodes, insertDistance, budget) {
     const dy = b.y - a.y;
     const d = Math.hypot(dx, dy);
     if (d > insertDistance) {
-      let midX = a.x + dx * 0.5;
-      let midY = a.y + dy * 0.5;
-      // border: keine neuen nodes außerhalb — sonst springt die kontur raus
-      if (typeof lab2BorderAllowsPoint === "function" && !lab2BorderAllowsPoint(midX, midY)) {
-        continue;
-      }
+      const midX = a.x + dx * 0.5;
+      const midY = a.y + dy * 0.5;
       const insertIndex = (i + 1) % nodes.length;
       const child = makeLab2Node(midX, midY, {
         maxSpeed: a.maxSpeed,
@@ -684,7 +676,7 @@ const Lab2GrowthMode = {
       cfg = lab2Cfg();
       syncNodeParams(cfg);
       const legacy = !!(state.lab2 && state.lab2.legacy);
-      const factor = clamp(state.speed, 0.2, 8);
+      const factor = clamp(state.speed, 0.2, 5);
       const bounds = { w, h, sepDist: cfg.separationDistance };
 
       quadtree.clear();
@@ -731,18 +723,7 @@ const Lab2GrowthMode = {
           selfMul: 1.0,
         });
       }
-      if (typeof lab2ContainAllNodes === "function") lab2ContainAllNodes(all);
       lab2SnapHoleRings(lines);
-
-      // version 1 (differential growth): kurze kanten zusammenführen, damit die
-      // node-dichte im gleichgewicht bleibt und nicht monoton bis zum limit wächst
-      // (verhindert "zu viele striche" + performance-einbruch).
-      if (!legacy) {
-        const mergeDist = cfg.insertDistance * 0.5;
-        for (let li = 0; li < lines.length; li++) {
-          lab2PruneShortEdges(lines[li].nodes, mergeDist);
-        }
-      }
 
       const total = totalNodes();
       if (total >= cfg.maxNodes) {
@@ -751,24 +732,9 @@ const Lab2GrowthMode = {
         let insertDist = cfg.insertDistance;
         const ratio = total / cfg.maxNodes;
         if (ratio > 0.8) insertDist *= 1 + (ratio - 0.8) * 6;
-        // pro frame nur begrenzt viele nodes einfügen — kein plötzlicher schub,
-        // der die szene in einem frame vervielfacht.
-        const budget = ratio > 0.55
-          ? Math.max(1, Math.floor((1 - ratio) * 24))
-          : Math.max(8, Math.floor(total * 0.12) + 8);
+        const budget = ratio > 0.65 ? Math.max(1, Math.floor((1 - ratio) * 24)) : Infinity;
         for (let li = 0; li < lines.length; li++) {
           lab2InsertLine(lines[li].nodes, insertDist, budget);
-        }
-        if (typeof lab2ContainAllNodes === "function") {
-          const after = [];
-          for (let li = 0; li < lines.length; li++) {
-            const rings = lab2LineRings(lines[li]);
-            for (let ri = 0; ri < rings.length; ri++) {
-              const nodes = rings[ri];
-              for (let i = 0; i < nodes.length; i++) after.push({ node: nodes[i] });
-            }
-          }
-          lab2ContainAllNodes(after);
         }
       }
 
@@ -789,16 +755,6 @@ const Lab2GrowthMode = {
         const added = contoursToLab2Lines(contours, lab2Cfg());
         for (let i = 0; i < added.length; i++) lines.push(added[i]);
         insertStopped = false;
-      },
-
-      // alles vom canvas entfernen (notfall-/stabilitäts-löschung)
-      clearAll() {
-        lines = [];
-        insertStopped = true;
-      },
-
-      nodeCount() {
-        return totalNodes();
       },
 
       getLines() {

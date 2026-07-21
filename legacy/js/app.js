@@ -3,17 +3,12 @@
    verschiedene generative Ansätze. Aktuell: Adern (differential line growth). */
 
 const host = document.getElementById("canvas-host");
-const SEED_TEXT_HINT = "type here";
 
 const els = {
   inputTabs: Array.from(document.querySelectorAll(".mode-tab")),
   growthModes: Array.from(document.querySelectorAll(".growth-mode:not(:disabled)")),
   textField: document.getElementById("seed-text"),
   sizer: document.getElementById("seed-sizer"),
-  measureBefore: document.getElementById("seed-measure-before"),
-  seedHint: document.getElementById("seed-hint"),
-  seedCaret: document.getElementById("seed-caret"),
-  seedLine: document.getElementById("seed-line"),
   desc: document.getElementById("mode-desc"),
   play: document.getElementById("btn-play"),
   reset: document.getElementById("btn-reset"),
@@ -95,48 +90,38 @@ const els = {
 
 const state = {
   mode: "lab2",
-  input: "text", // "text" | "draw" | "border"
-  flatVersion: 1, // 1 = klassik (explosion), 2 = differential growth
-  threeVersion: 1, // 1 = 3d web (dof), 2 = 3d growth (diff3d)
+  input: "text", // "text" | "draw"
   paused: false,
-  speed: 4,
+  speed: 1.5,
   a: 0.5, // liniendicke
   b: 0.5, // abstand
   c: 0.5, // teilung
   brush: 24,
-  text: "",
+  text: "TYPE HERE",
   reactorFont: "Helvetica Neue",
   reactorFontUrl: "",
   reactorFontWeight: "700",
-  border: {
-    tool: "shape", // "shape" | "paint"
-    shape: "rect", // "rect" | "circle"
-    pathfinder: "unite", // unite | minus | intersect | exclude
-  },
   lab2: {
     stroke: 0.1, // ~2 px
-    force: 0.75, // 75% abstoßung
-    attraction: 0.25,
-    repulsion: 0.75,
+    attraction: 0.5,
+    repulsion: 0.5,
     push: 0.5,
     split: 0.31,
-    complexity: 0, // ~10 start-knoten
+    complexity: 0.11, // ~20 start-knoten
     nodeLimit: 0.2, // ~4000 nodes
     showNodes: false,
-    legacy: true, // version 1 = klassik; version 2 = differential growth
+    legacy: false, // alte "explosions"-version (linien überschneiden sich)
   },
   lab: {
     split: 0.5, // ~31 px teilungs-abstand
   },
   diff3d: {
-    stroke: 0.1,
-    force: 0.75,
-    attraction: 0.25,
-    repulsion: 0.75,
+    attraction: 0.5,
+    repulsion: 0.5,
     depth: 0.45,
     link: 0.45,
     split: 0.31,
-    complexity: 0,
+    complexity: 0.11,
     nodeLimit: 0.2,
     dofFocus: 0.5,
     dofBlur: 0.5,
@@ -148,14 +133,12 @@ const state = {
     showNodes: false,
   },
   dof: {
-    stroke: 0.1,
-    force: 0.75,
-    attraction: 0.25,
-    repulsion: 0.75,
+    attraction: 0.5,
+    repulsion: 0.5,
     depth: 0.45,
     link: 0.4,
     split: 0.31,
-    complexity: 0,
+    complexity: 0.11,
     nodeLimit: 0.2,
     tumble: 0.4,
     graph: null,
@@ -164,10 +147,28 @@ const state = {
 };
 
 const SCALE = 4; // raster der maske (px pro zelle)
-const DISPLAY_FONT = "Astloch";
-const UI_FONT = "Helvetica Neue";
-const UI_FONT_STACK = `"${UI_FONT}", Helvetica, Arial, sans-serif`;
-const FONT_STACK = `"${DISPLAY_FONT}", Georgia, "Times New Roman", serif`;
+const FONT_STACK = '"Helvetica Neue", Helvetica, Arial, sans-serif'; // identisch zum eingabefeld
+const STORAGE_KEY_SPEED = "weirdgrowth-speed";
+
+function loadSpeedFromStorage() {
+  try {
+    const raw = localStorage.getItem(STORAGE_KEY_SPEED);
+    if (raw == null) return;
+    const v = parseFloat(raw);
+    if (Number.isFinite(v)) state.speed = clamp(v, 0.2, 5);
+  } catch (err) {
+    /* ignore */
+  }
+}
+
+function saveSpeedToStorage() {
+  try {
+    localStorage.setItem(STORAGE_KEY_SPEED, String(state.speed));
+  } catch (err) {
+    /* ignore */
+  }
+}
+
 function syncSpeedUI() {
   if (!els.speed || !els.speedVal) return;
   els.speed.value = String(state.speed);
@@ -211,522 +212,14 @@ const seed = { mw: 0, mh: 0, mask: null, maskScale: SCALE };
 
 let drawG = null; // live-vorschau während des strichs
 let drawSeedG = null; // unsichtbare kumulative seed-ebene (für reset/clear)
-let borderG = null; // fertige border-region (alpha-maske)
 let drawStrokeBefore = null; // snapshot vor dem aktuellen strich
 let drewThisStroke = false;
 let isDrawingStroke = false;
-let borderDrag = null; // { x0, y0, x1, y1 } während form-ziehen
-let borderMaskCache = {
-  mask: null,
-  mw: 0,
-  mh: 0,
-  scale: 1,
-  hasInk: false,
-  cx: 0,
-  cy: 0,
-};
-let borderOutline = [];
-let borderClipG = null;
-let borderStrokeG = null;
-let hideBorderChrome = false; // true beim export — keine border-kontur im bild
 let p5i = null;
 let sim = null;
 
-/* stabilitäts-wächter: bei anhaltend niedriger framerate wird das aktuelle
-   objekt automatisch vom canvas gelöscht (schutz vor einfrieren). */
-const STABILITY_MIN_FPS = 18;
-const STABILITY_MIN_FPS_3D = 20;
-const STABILITY_MAX_FRAME_MS = 72; // ~14 fps pro frame
-const STABILITY_MAX_FRAME_MS_3D = 58; // ~17 fps pro frame in 3d
-const STABILITY_TRIP_FRAMES = 45; // ~0.75s durchgehend zu langsam
-const STABILITY_WARMUP_FRAMES = 60; // erst nach kurzer aufwärmphase prüfen
-const STABILITY_COOLDOWN_FRAMES = 180; // nach notfall-stopp kurz nicht erneut auslösen
-let lowFpsFrames = 0;
-let stabilityLastMs = 0;
-let emergencyCooldown = 0;
-let perfToastHideTimer = null;
-let seedCaretHideTimer = null;
-let seedCaretIdleHidden = false;
-const SEED_CARET_IDLE_MS = 3000;
-
-function clearSeedCaretHideTimer() {
-  if (seedCaretHideTimer) {
-    window.clearTimeout(seedCaretHideTimer);
-    seedCaretHideTimer = null;
-  }
-}
-
-function scheduleSeedCaretHide() {
-  clearSeedCaretHideTimer();
-  seedCaretHideTimer = window.setTimeout(() => {
-    seedCaretIdleHidden = true;
-    els.seedCaret?.classList.add("is-off");
-  }, SEED_CARET_IDLE_MS);
-}
-
-function is3dMode() {
-  return state.mode === "diff3d" || state.mode === "dof";
-}
-
-function stabilityMinFps() {
-  return is3dMode() ? STABILITY_MIN_FPS_3D : STABILITY_MIN_FPS;
-}
-
-function stabilityMaxFrameMs() {
-  return is3dMode() ? STABILITY_MAX_FRAME_MS_3D : STABILITY_MAX_FRAME_MS;
-}
-
-function hasActiveGrowth() {
-  if (sim && typeof sim.totalNodes === "function" && sim.totalNodes() > 0) return true;
-  if ((state.input === "draw" || isBorderPaintTool()) && isDrawingStroke) return true;
-  return false;
-}
-
-function showPerfNotice(message) {
-  const root = document.getElementById("perf-toast");
-  const text = root?.querySelector(".perf-toast-text");
-  if (!root || !text) return;
-  text.textContent = message;
-  root.hidden = false;
-  root.classList.add("is-visible");
-  if (perfToastHideTimer) window.clearTimeout(perfToastHideTimer);
-  perfToastHideTimer = window.setTimeout(() => {
-    root.classList.remove("is-visible");
-    perfToastHideTimer = window.setTimeout(() => {
-      root.hidden = true;
-    }, 380);
-  }, 5200);
-}
-
-function clearCanvas() {
-  if (state.input === "draw" || state.input === "border") {
-    if (drawG) drawG.clear();
-    if (drawSeedG) drawSeedG.clear();
-    drawStrokeBefore = null;
-    drewThisStroke = false;
-    isDrawingStroke = false;
-  }
-  if (state.input === "border") {
-    if (borderG) borderG.clear();
-    if (borderStrokeG) borderStrokeG.clear();
-    borderDrag = null;
-    refreshBorderMaskCache();
-  }
-  if (state.mode === "diff3d") {
-    state.diff3d.graph = null;
-    if (sim && sim.clearGraph) sim.clearGraph();
-    else rebuildSim();
-    return;
-  }
-  if (state.mode === "dof") {
-    state.dof.graph = null;
-    if (sim && sim.clearGraph) sim.clearGraph();
-    else rebuildSim();
-    return;
-  }
-  if (sim && typeof sim.clearAll === "function") sim.clearAll();
-  else rebuildSim();
-}
-
-function emergencyClear() {
-  if (emergencyCooldown > 0) return;
-  emergencyCooldown = STABILITY_COOLDOWN_FRAMES;
-  const in3d = is3dMode();
-  clearCanvas();
-  setPaused(true);
-  lowFpsFrames = 0;
-  stabilityLastMs = 0;
-  showPerfNotice(
-    in3d
-      ? "performance zu niedrig — 3d-wachstum automatisch gestoppt"
-      : "performance zu niedrig — wachstum automatisch gestoppt"
-  );
-}
-
 function clamp(v, lo, hi) {
   return v < lo ? lo : v > hi ? hi : v;
-}
-
-/* ============================================================
-   BORDER — formen + pathfinder + malen innerhalb
-   ============================================================ */
-
-const BORDER_PF_OPS = {
-  unite: "source-over",
-  minus: "destination-out",
-  intersect: "destination-in",
-  exclude: "xor",
-};
-
-function isBorderPaintTool() {
-  return state.input === "border" && state.border.tool === "paint";
-}
-
-function isBorderShapeTool() {
-  return state.input === "border" && state.border.tool === "shape";
-}
-
-function syncBorderToolUI() {
-  const tool = state.border.tool;
-  document.body.dataset.borderTool = tool;
-  document.querySelectorAll(".border-shape-btn").forEach((btn) => {
-    const active = tool === "shape" && btn.dataset.borderShape === state.border.shape;
-    btn.classList.toggle("is-active", active);
-  });
-  document.querySelectorAll(".border-tool-btn").forEach((btn) => {
-    btn.classList.toggle("is-active", tool === "paint" && btn.dataset.borderTool === "paint");
-  });
-  document.querySelectorAll(".border-pf-btn").forEach((btn) => {
-    btn.classList.toggle("is-active", btn.dataset.borderPf === state.border.pathfinder);
-  });
-}
-
-function refreshBorderMaskCache() {
-  if (!borderG) {
-    borderMaskCache = {
-      mask: null,
-      mw: 0,
-      mh: 0,
-      scale: 1,
-      hasInk: false,
-      cx: 0,
-      cy: 0,
-    };
-    borderOutline = [];
-    if (borderStrokeG) borderStrokeG.clear();
-    return;
-  }
-  const scale = 1;
-  const { mask, mw, mh } = maskFromGraphics(borderG, borderG.width, borderG.height, {
-    scale,
-    alphaThreshold: 20,
-  });
-  let hasInk = false;
-  let sumX = 0;
-  let sumY = 0;
-  let count = 0;
-  for (let gy = 0; gy < mh; gy++) {
-    for (let gx = 0; gx < mw; gx++) {
-      if (!mask[gy * mw + gx]) continue;
-      hasInk = true;
-      sumX += gx;
-      sumY += gy;
-      count++;
-    }
-  }
-  borderMaskCache = {
-    mask,
-    mw,
-    mh,
-    scale,
-    hasInk,
-    cx: count ? (sumX / count) * scale + scale * 0.5 : mw * 0.5,
-    cy: count ? (sumY / count) * scale + scale * 0.5 : mh * 0.5,
-  };
-  borderOutline = [];
-  rebuildBorderStrokeGfx();
-}
-
-function borderContainsPoint(x, y) {
-  const c = borderMaskCache;
-  if (!c.hasInk || !c.mask) return false;
-  const gx = Math.floor(x / c.scale);
-  const gy = Math.floor(y / c.scale);
-  if (gx < 0 || gy < 0 || gx >= c.mw || gy >= c.mh) return false;
-  return !!c.mask[gy * c.mw + gx];
-}
-
-function projectIntoBorder(x, y) {
-  if (borderContainsPoint(x, y)) return { x, y };
-  const c = borderMaskCache;
-  if (!c.hasInk) return { x, y };
-  const cx = c.cx;
-  const cy = c.cy;
-  let x0 = cx;
-  let y0 = cy;
-  let x1 = x;
-  let y1 = y;
-  // binärsuche: äußerster noch innen liegender punkt Richtung ziel
-  if (!borderContainsPoint(x0, y0)) {
-    // centroid draußen (sollte selten sein) — spire-suche
-    for (let rad = 1; rad < 80; rad++) {
-      for (let a = 0; a < 16; a++) {
-        const ang = (a / 16) * Math.PI * 2;
-        const px = x + Math.cos(ang) * rad;
-        const py = y + Math.sin(ang) * rad;
-        if (borderContainsPoint(px, py)) return { x: px, y: py };
-      }
-    }
-    return { x: cx, y: cy };
-  }
-  for (let i = 0; i < 12; i++) {
-    const mx = (x0 + x1) * 0.5;
-    const my = (y0 + y1) * 0.5;
-    if (borderContainsPoint(mx, my)) {
-      x0 = mx;
-      y0 = my;
-    } else {
-      x1 = mx;
-      y1 = my;
-    }
-  }
-  // leicht nach innen ziehen, damit kanten nicht auf der pixelgrenze flattern
-  const dx = cx - x0;
-  const dy = cy - y0;
-  const d = Math.hypot(dx, dy) || 1;
-  const inset = 1.25;
-  let ix = x0 + (dx / d) * inset;
-  let iy = y0 + (dy / d) * inset;
-  if (!borderContainsPoint(ix, iy)) {
-    ix = x0;
-    iy = y0;
-  }
-  return { x: ix, y: iy };
-}
-
-/** von lab2-growth.js — true wenn punkt in der border liegt (oder keine border aktiv) */
-function lab2BorderAllowsPoint(x, y) {
-  if (state.input !== "border" || !borderMaskCache.hasInk) return true;
-  return borderContainsPoint(x, y);
-}
-
-/** von lab2-growth.js aufgerufen — hält nodes innerhalb der border */
-function lab2ContainNode(node, prevX, prevY) {
-  if (state.input !== "border" || !borderMaskCache.hasInk) return;
-  if (borderContainsPoint(node.x, node.y)) {
-    // geschwindigkeit nach außen dämpfen, wenn der nächste schritt raus würde
-    const lookX = node.x + node.vx;
-    const lookY = node.y + node.vy;
-    if (!borderContainsPoint(lookX, lookY)) {
-      const c = borderMaskCache;
-      const toCx = c.cx - node.x;
-      const toCy = c.cy - node.y;
-      const outward = node.vx * toCx + node.vy * toCy;
-      if (outward < 0) {
-        // radialen anteil nach außen entfernen
-        const len = Math.hypot(toCx, toCy) || 1;
-        const nx = toCx / len;
-        const ny = toCy / len;
-        const radial = node.vx * nx + node.vy * ny;
-        if (radial < 0) {
-          node.vx -= radial * nx;
-          node.vy -= radial * ny;
-        }
-        node.vx *= 0.35;
-        node.vy *= 0.35;
-      }
-    }
-    return;
-  }
-
-  let x0 = prevX;
-  let y0 = prevY;
-  let x1 = node.x;
-  let y1 = node.y;
-  if (borderContainsPoint(x0, y0)) {
-    for (let i = 0; i < 10; i++) {
-      const mx = (x0 + x1) * 0.5;
-      const my = (y0 + y1) * 0.5;
-      if (borderContainsPoint(mx, my)) {
-        x0 = mx;
-        y0 = my;
-      } else {
-        x1 = mx;
-        y1 = my;
-      }
-    }
-    const inset = projectIntoBorder(x0, y0);
-    node.x = inset.x;
-    node.y = inset.y;
-  } else {
-    const inset = projectIntoBorder(node.x, node.y);
-    node.x = inset.x;
-    node.y = inset.y;
-  }
-  node.vx *= 0.05;
-  node.vy *= 0.05;
-}
-
-function lab2ContainAllNodes(all) {
-  if (state.input !== "border" || !borderMaskCache.hasInk || !all) return;
-  for (let i = 0; i < all.length; i++) {
-    const node = all[i].node;
-    lab2ContainNode(node, node.x, node.y);
-  }
-}
-
-function normalizeBorderRect(x0, y0, x1, y1) {
-  const left = Math.round(Math.min(x0, x1));
-  const top = Math.round(Math.min(y0, y1));
-  const right = Math.round(Math.max(x0, x1));
-  const bottom = Math.round(Math.max(y0, y1));
-  const w = Math.max(0, right - left);
-  const h = Math.max(0, bottom - top);
-  return {
-    left,
-    top,
-    w,
-    h,
-    cx: left + w * 0.5,
-    cy: top + h * 0.5,
-    r: Math.round(Math.min(w, h) * 0.5),
-  };
-}
-
-function drawBorderShapeOn(gfx, shape, x0, y0, x1, y1, filled) {
-  const r = normalizeBorderRect(x0, y0, x1, y1);
-  if (r.w < 2 && r.h < 2) return false;
-  const ctx = gfx.drawingContext;
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  if (gfx.noSmooth) gfx.noSmooth();
-  if (filled) {
-    ctx.fillStyle = "#000000";
-    ctx.beginPath();
-    if (shape === "circle") {
-      if (r.r < 1) {
-        ctx.restore();
-        return false;
-      }
-      ctx.arc(r.cx, r.cy, r.r, 0, Math.PI * 2);
-    } else {
-      ctx.rect(r.left, r.top, Math.max(1, r.w), Math.max(1, r.h));
-    }
-    ctx.fill();
-  } else {
-    ctx.strokeStyle = "#000000";
-    ctx.lineWidth = 1.5;
-    ctx.beginPath();
-    if (shape === "circle") {
-      if (r.r < 1) {
-        ctx.restore();
-        return false;
-      }
-      ctx.arc(r.cx, r.cy, r.r, 0, Math.PI * 2);
-    } else {
-      ctx.rect(r.left + 0.5, r.top + 0.5, Math.max(1, r.w - 1), Math.max(1, r.h - 1));
-    }
-    ctx.stroke();
-  }
-  ctx.restore();
-  return true;
-}
-
-function applyBorderPathfinder(shape, x0, y0, x1, y1) {
-  if (!borderG || !p5i) return;
-  const op = state.border.pathfinder || "unite";
-  const empty = !borderMaskCache.hasInk;
-  const effectiveOp = empty && op !== "unite" ? "unite" : op;
-  const tmp = p5i.createGraphics(borderG.width, borderG.height);
-  tmp.pixelDensity(1);
-  tmp.clear();
-  if (tmp.noSmooth) tmp.noSmooth();
-  if (!drawBorderShapeOn(tmp, shape, x0, y0, x1, y1, true)) {
-    tmp.remove();
-    return;
-  }
-  const ctx = borderG.drawingContext;
-  ctx.save();
-  ctx.imageSmoothingEnabled = false;
-  ctx.globalCompositeOperation = BORDER_PF_OPS[effectiveOp] || "source-over";
-  borderG.image(tmp, 0, 0);
-  ctx.restore();
-  tmp.remove();
-  refreshBorderMaskCache();
-}
-
-function clipGraphicsToBorder(gfx) {
-  if (!gfx || !borderG || !borderMaskCache.hasInk) return;
-  const ctx = gfx.drawingContext;
-  ctx.save();
-  ctx.globalCompositeOperation = "destination-in";
-  gfx.image(borderG, 0, 0);
-  ctx.restore();
-}
-
-function rebuildBorderStrokeGfx() {
-  if (!p5i || !borderG) return;
-  if (!borderStrokeG || borderStrokeG.width !== borderG.width || borderStrokeG.height !== borderG.height) {
-    if (borderStrokeG) borderStrokeG.remove();
-    borderStrokeG = p5i.createGraphics(borderG.width, borderG.height);
-    borderStrokeG.pixelDensity(1);
-    if (borderStrokeG.noSmooth) borderStrokeG.noSmooth();
-  }
-  borderStrokeG.clear();
-  if (!borderMaskCache.hasInk) return;
-
-  // ring = erweiterte silhouette minus original → 1–2 px schwarze kontur
-  const offsets = [
-    [-1, 0], [1, 0], [0, -1], [0, 1],
-    [-1, -1], [1, -1], [-1, 1], [1, 1],
-    [-2, 0], [2, 0], [0, -2], [0, 2],
-  ];
-  for (let i = 0; i < offsets.length; i++) {
-    borderStrokeG.image(borderG, offsets[i][0], offsets[i][1]);
-  }
-  const ctx = borderStrokeG.drawingContext;
-  ctx.save();
-  ctx.globalCompositeOperation = "destination-out";
-  borderStrokeG.image(borderG, 0, 0);
-  ctx.restore();
-}
-
-function drawBorderOverlay(p) {
-  if (hideBorderChrome || !borderStrokeG || !borderMaskCache.hasInk) return;
-  p.push();
-  if (p.noSmooth) p.noSmooth();
-  p.drawingContext.imageSmoothingEnabled = false;
-  p.image(borderStrokeG, 0, 0);
-  p.pop();
-}
-
-/** Wachstum außerhalb der border mit weiß überdecken — verhindert sichtbares „rauspringen“ */
-function maskGrowthToBorder(p) {
-  if (!borderG || !borderMaskCache.hasInk || !p) return;
-  if (!borderClipG || borderClipG.width !== p.width || borderClipG.height !== p.height) {
-    if (borderClipG) borderClipG.remove();
-    borderClipG = p.createGraphics(p.width, p.height);
-    borderClipG.pixelDensity(1);
-  }
-  borderClipG.clear();
-  borderClipG.background(255);
-  const ctx = borderClipG.drawingContext;
-  ctx.save();
-  ctx.globalCompositeOperation = "destination-out";
-  borderClipG.image(borderG, 0, 0);
-  ctx.restore();
-  p.image(borderClipG, 0, 0);
-}
-
-function drawBorderDragPreview(p) {
-  if (hideBorderChrome || !borderDrag) return;
-  const { x0, y0, x1, y1 } = borderDrag;
-  const shape = state.border.shape;
-  const r = normalizeBorderRect(x0, y0, x1, y1);
-  p.push();
-  if (p.noSmooth) p.noSmooth();
-  p.drawingContext.imageSmoothingEnabled = false;
-  p.noFill();
-  p.stroke(0);
-  p.strokeWeight(1.5);
-  p.drawingContext.setLineDash([5, 4]);
-  if (shape === "circle") {
-    if (r.r >= 1) p.circle(r.cx, r.cy, r.r * 2);
-  } else if (r.w >= 1 || r.h >= 1) {
-    p.rect(r.left + 0.5, r.top + 0.5, Math.max(1, r.w - 1), Math.max(1, r.h - 1));
-  }
-  p.drawingContext.setLineDash([]);
-  p.pop();
-}
-
-/** canvas ohne border-ui neu zeichnen und als png speichern */
-function savePngWithoutBorderChrome(filename) {
-  if (!p5i) return;
-  hideBorderChrome = true;
-  if (sim && sim.draw) sim.draw();
-  if (state.input === "border") maskGrowthToBorder(p5i);
-  p5i.saveCanvas(filename, "png");
-  hideBorderChrome = false;
 }
 
 /* ============================================================
@@ -737,7 +230,7 @@ function seedTextSize(gfx, txt, w, h) {
   const tmp = document.createElement("canvas");
   const ctx = tmp.getContext("2d");
   if (!ctx) return Math.max(22, Math.min(h * 0.28, 200));
-  const fam = state.mode === "reactor" ? state.reactorFont : DISPLAY_FONT;
+  const fam = state.mode === "reactor" ? state.reactorFont : "Helvetica Neue";
   const wt = state.mode === "reactor" ? state.reactorFontWeight : "700";
   return measureSeedFontSize(ctx, txt, w, h, fam, wt);
 }
@@ -746,7 +239,7 @@ function drawSeedText(gfx, txt, w, h) {
   const layout = getGrowthLayout(w, h);
   const tmp = document.createElement("canvas");
   const ctx = tmp.getContext("2d");
-  const fam = state.mode === "reactor" ? state.reactorFont : DISPLAY_FONT;
+  const fam = state.mode === "reactor" ? state.reactorFont : "Helvetica Neue";
   const wt = state.mode === "reactor" ? state.reactorFontWeight : "700";
   const line = ctx ? seedLineMetrics(ctx, txt, layout, fam, wt) : null;
   gfx.push();
@@ -778,7 +271,7 @@ function refreshSeed(p) {
     src.image(drawG, 0, 0);
   }
 
-  const drawOpts = state.input === "draw" || state.input === "border" ? drawExtractOpts() : null;
+  const drawOpts = state.input === "draw" ? drawExtractOpts() : null;
   const { mask, mw, mh } = maskFromGraphics(src, w, h, drawOpts);
   src.remove();
 
@@ -1022,22 +515,13 @@ function simHasGrowth() {
 }
 
 function commitDrawStroke(p) {
-  if (!drawG || !p || (state.input !== "draw" && state.input !== "border")) return;
-  if (state.input === "border" && state.border.tool !== "paint") return;
-  if (state.input === "border" && !borderMaskCache.hasInk) {
-    drawG.clear();
-    showPerfNotice("zuerst eine border mit rechteck oder kreis anlegen");
-    return;
-  }
-
-  if (state.input === "border") clipGraphicsToBorder(drawG);
+  if (!drawG || !p || state.input !== "draw") return;
 
   let contours = extractNewDrawContours(drawStrokeBefore, drawG, p.width, p.height);
   if (contours.length === 0) {
     contours = contoursFromGraphics(drawG, p.width, p.height, true);
   }
   mergeStrokeToDrawSeed(p);
-  if (state.input === "border") clipGraphicsToBorder(drawSeedG);
   drawG.clear();
 
   if (contours.length === 0 && drawSeedG && !simHasGrowth()) {
@@ -1210,7 +694,7 @@ async function loadReactorFont(family, url) {
 }
 
 function reactorFontCss(family, size, weight) {
-  const fam = (family || UI_FONT).trim();
+  const fam = (family || "Helvetica Neue").trim();
   const quoted = fam.includes(" ") ? `"${fam}"` : fam;
   return `${weight || "700"} ${size}px ${quoted}, Helvetica, Arial, sans-serif`;
 }
@@ -1232,9 +716,7 @@ function measureSeedFontSize(ctx, text, w, h, family, weight) {
   const chars = seedGlyphCount(trimmed);
   let size = Math.min(h * 0.8, w * 0.85);
   ctx.font = reactorFontCss(family, size, weight);
-  // sanftere verkleinerung: text bleibt bei mehr zeichen deutlich größer,
-  // damit die pfade auch ab ~6 zeichen noch komplex genug sind.
-  const targetFrac = clamp(0.94 / Math.pow(chars, 0.14), 0.66, 0.94);
+  const targetFrac = clamp(0.9 / Math.pow(chars, 0.32), 0.2, 0.9);
   const target = w * targetFrac;
   const tw = ctx.measureText(trimmed).width || 1;
   if (tw > target) size *= target / tw;
@@ -1244,31 +726,6 @@ function measureSeedFontSize(ctx, text, w, h, family, weight) {
   const maxH = h - vPad * 2;
   if (glyph.height > maxH) size *= maxH / glyph.height;
   return Math.max(22, size);
-}
-
-function measureHintFontSize(ctx, w, h, family, weight) {
-  // kleiner leerer zustand: dezenter cursor + kompaktes feld (hint selbst ist css)
-  let size = Math.min(h * 0.09, w * 0.06, 44);
-  size = Math.max(size, 24);
-  ctx.font = reactorFontCss(family, size, weight);
-  const tw = ctx.measureText(SEED_TEXT_HINT).width || 1;
-  const maxW = w * 0.82;
-  if (tw > maxW) size *= maxW / tw;
-  return Math.max(22, size);
-}
-
-function applySeedFieldFont(el, size, family, weight, isReactor) {
-  if (!el) return;
-  el.style.fontSize = `${size}px`;
-  if (isReactor) {
-    const fam = family.includes(" ") ? `"${family}"` : family;
-    const fontCss = `${weight} ${size}px ${fam}, Helvetica, Arial, sans-serif`;
-    el.style.fontFamily = fontCss;
-    el.style.fontWeight = weight;
-  } else {
-    el.style.fontFamily = "";
-    el.style.fontWeight = "700";
-  }
 }
 
 function makeBinaryFromCanvas(ctx, w, h, threshold = 128) {
@@ -1460,17 +917,16 @@ function syncMobileSheetHeight() {
 }
 
 function getGrowthLayout(w, h) {
-  // stage/canvas-höhe schließt das mobile sheet bereits aus
   const sheetH = getMobileSheetInset();
-  const visibleH = Math.max(1, h);
+  const visibleH = Math.max(1, h - sheetH);
   return {
     w,
     h,
     sheetH,
     visibleH,
     measureW: w,
-    measureH: visibleH,
-    textCenterY: visibleH * 0.5,
+    measureH: sheetH > 0 ? visibleH : h,
+    textCenterY: sheetH > 0 ? visibleH * 0.5 : h * 0.5,
   };
 }
 
@@ -2619,7 +2075,7 @@ function contoursToGrowthLines(contours) {
 // gemeinsame kontur-initialisierung — ändert weder physik noch darstellung
 function buildGrowthLines(w, h) {
   const maskScale = seed.maskScale ?? SCALE;
-  const drawOpts = state.input === "draw" || state.input === "border" ? drawExtractOpts() : null;
+  const drawOpts = state.input === "draw" ? drawExtractOpts() : null;
   const extractOpts = drawOpts
     ? {
         minArea: drawOpts.minArea,
@@ -2656,13 +2112,13 @@ function buildLab2Contours(w, h) {
       txt,
       w,
       h,
-      state.reactorFont || DISPLAY_FONT,
+      state.reactorFont || "Helvetica Neue",
       state.reactorFontWeight || "700",
       seedSpacing
     );
   } else {
     const maskScale = seed.maskScale ?? SCALE;
-    const drawOpts = state.input === "draw" || state.input === "border" ? drawExtractOpts() : null;
+    const drawOpts = state.input === "draw" ? drawExtractOpts() : null;
     const extractOpts = drawOpts
       ? {
           minArea: drawOpts.minArea,
@@ -2679,7 +2135,7 @@ function buildLab2Contours(w, h) {
     contours,
     w,
     h,
-    state.input === "draw" || state.input === "border" ? { minPts: 3 } : undefined
+    state.input === "draw" ? { minPts: 3 } : undefined
   );
 }
 
@@ -2700,27 +2156,25 @@ function countSimNodes() {
   return n;
 }
 
-function refreshNodeCountLabel() {
-  const out = document.getElementById("val-node-count");
-  if (!out) return;
-  const st = activeParamState();
-  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(st) : 4000;
-  let cur = 0;
-  if (state.mode === "lab2") cur = countSimNodes();
-  else if (sim && typeof sim.totalNodes === "function") cur = sim.totalNodes();
-  out.textContent = `${cur} / ${max}`;
-}
-
-function refreshLab2MaxNodesLabel() {
-  refreshNodeCountLabel();
-}
-
 function refreshDiff3MaxNodesLabel() {
-  refreshNodeCountLabel();
+  if (!els.d3MaxNodes) return;
+  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.diff3d) : 4000;
+  const cur = sim && typeof sim.totalNodes === "function" ? sim.totalNodes() : 0;
+  els.d3MaxNodes.textContent = `${cur} / ${max}`;
 }
 
 function refreshDofMaxNodesLabel() {
-  refreshNodeCountLabel();
+  if (!els.dofMaxNodes) return;
+  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.dof) : 4000;
+  const cur = state.mode === "dof" && sim && typeof sim.totalNodes === "function" ? sim.totalNodes() : 0;
+  els.dofMaxNodes.textContent = `${cur} / ${max}`;
+}
+
+function refreshLab2MaxNodesLabel() {
+  if (!els.l2MaxNodes) return;
+  const max = typeof lab2MaxNodes === "function" ? lab2MaxNodes(state.lab2) : 4000;
+  const cur = state.mode === "lab2" ? countSimNodes() : 0;
+  els.l2MaxNodes.textContent = `${cur} / ${max}`;
 }
 
 function growthParams() {
@@ -2800,11 +2254,14 @@ function setMode(modeKey) {
   if (!FACTORIES[modeKey]) return;
   state.mode = modeKey;
   document.body.dataset.mode = modeKey;
-  const is3d = modeKey === "diff3d" || modeKey === "dof";
-  document.body.dataset.ctx = is3d ? "3d" : "flat";
-  document.body.classList.toggle("ctx-3d", is3d);
-  document.body.classList.toggle("ctx-flat", !is3d);
-  if (typeof syncPanelForMode === "function") syncPanelForMode();
+  if (MODES[modeKey] && els.desc) els.desc.textContent = MODES[modeKey].desc;
+  els.growthModes.forEach((btn) => btn.classList.toggle("is-active", btn.dataset.mode === modeKey));
+  document.body.classList.toggle("mode-reactor", modeKey === "reactor");
+  document.body.classList.toggle("mode-lab", modeKey === "lab" || modeKey === "lab2" || modeKey === "diff3d" || modeKey === "dof");
+  document.body.classList.toggle("mode-lab2", modeKey === "lab2");
+  document.body.classList.toggle("mode-diff3d", modeKey === "diff3d");
+  document.body.classList.toggle("mode-dof", modeKey === "dof");
+  refreshParamLabels();
   updateInputFontSize();
   rebuildSim();
 }
@@ -2814,9 +2271,6 @@ function setInput(inputKey) {
   els.inputTabs.forEach((btn) => btn.classList.toggle("is-active", btn.dataset.input === inputKey));
   document.body.classList.toggle("is-text", inputKey === "text");
   document.body.classList.toggle("is-draw", inputKey === "draw");
-  document.body.classList.toggle("is-border", inputKey === "border");
-  if (inputKey === "border") syncBorderToolUI();
-  else document.body.removeAttribute("data-border-tool");
   if (inputKey === "text" && els.textField) els.textField.focus();
   rebuildSim();
 }
@@ -2831,49 +2285,35 @@ function exportSVG() {
   const lines = sim.getLines();
   const w = p5i.width;
   const h = p5i.height;
-  const sw = (sim.strokeW ?? 2).toFixed(1);
-
-  const ringPath = (nodes) => {
-    if (!nodes || nodes.length < 2) return "";
-    let d = `M ${nodes[0].x.toFixed(2)} ${nodes[0].y.toFixed(2)}`;
-    for (let j = 1; j < nodes.length; j++) {
-      d += `L ${nodes[j].x.toFixed(2)} ${nodes[j].y.toFixed(2)}`;
-    }
-    // ohne Z schließen — illustrator füllt geschlossene Z-pfade sonst oft weiß
-    d += `L ${nodes[0].x.toFixed(2)} ${nodes[0].y.toFixed(2)}`;
-    return d;
-  };
 
   let paths = "";
   for (let i = 0; i < lines.length; i++) {
     const nodes = lines[i].nodes;
-    const d = ringPath(nodes);
-    if (d) {
-      paths += `<path d="${d}" class="stroke"/>\n`;
+    if (!nodes || nodes.length < 2) continue;
+    let d = `M ${nodes[0].x.toFixed(1)} ${nodes[0].y.toFixed(1)}`;
+    for (let j = 1; j < nodes.length; j++) {
+      d += ` L ${nodes[j].x.toFixed(1)} ${nodes[j].y.toFixed(1)}`;
     }
+    d += " Z";
     const holes = lines[i].holes;
     if (holes) {
       for (let hi = 0; hi < holes.length; hi++) {
-        const hd = ringPath(holes[hi]);
-        if (hd) paths += `<path d="${hd}" class="stroke"/>\n`;
+        const ring = holes[hi];
+        if (!ring || ring.length < 2) continue;
+        d += ` M ${ring[0].x.toFixed(1)} ${ring[0].y.toFixed(1)}`;
+        for (let j = 1; j < ring.length; j++) {
+          d += ` L ${ring[j].x.toFixed(1)} ${ring[j].y.toFixed(1)}`;
+        }
+        d += " Z";
       }
     }
+    const evenodd = holes?.length ? ' fill-rule="evenodd"' : "";
+    paths += `<path d="${d}"${evenodd} fill="none" stroke="#0a0a0a" stroke-width="${sim.strokeW.toFixed(1)}" stroke-linecap="round" stroke-linejoin="round"/>\n`;
   }
 
-  // style-block: fill:none ist für illustrator zuverlässiger als nur attribute
-  const svg = [
-    `<?xml version="1.0" encoding="UTF-8"?>`,
-    `<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" fill="none">`,
-    `<style type="text/css"><![CDATA[`,
-    `.stroke{fill:none;fill-opacity:0;stroke:#0a0a0a;stroke-width:${sw};stroke-linecap:round;stroke-linejoin:round;}`,
-    `]]></style>`,
-    `<g fill="none" fill-opacity="0" stroke="#0a0a0a" stroke-width="${sw}" stroke-linecap="round" stroke-linejoin="round">`,
-    paths.trim(),
-    `</g>`,
-    `</svg>`,
-  ].join("\n");
+  const svg = `<?xml version="1.0" encoding="UTF-8"?>\n<svg xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">\n<rect width="${w}" height="${h}" fill="#ffffff"/>\n${paths}</svg>`;
 
-  const blob = new Blob([svg], { type: "image/svg+xml;charset=utf-8" });
+  const blob = new Blob([svg], { type: "image/svg+xml" });
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
   a.href = url;
@@ -3020,8 +2460,16 @@ function createGlassSurface(el, glCanvas) {
   };
 }
 
-// glasoptik entfernt — panel/topbar sind solide flächen
-const glassSurfaces = [];
+const glassSurfaces = [
+  createGlassSurface(
+    document.querySelector(".side-panel"),
+    document.getElementById("panel-glass-canvas")
+  ),
+  createGlassSurface(
+    document.querySelector(".input-modes"),
+    document.getElementById("topbar-glass-canvas")
+  ),
+].filter(Boolean);
 
 const sketch = (p) => {
   p5i = p;
@@ -3037,51 +2485,16 @@ const sketch = (p) => {
     drawSeedG = p.createGraphics(p.width, p.height);
     drawSeedG.pixelDensity(1);
     drawSeedG.clear();
-    borderG = p.createGraphics(p.width, p.height);
-    borderG.pixelDensity(1);
-    if (borderG.noSmooth) borderG.noSmooth();
-    borderG.clear();
-    refreshBorderMaskCache();
     rebuildSim();
   };
 
   p.draw = () => {
-    const nowMs = performance.now();
-    const frameMs = stabilityLastMs > 0 ? nowMs - stabilityLastMs : 0;
-    stabilityLastMs = nowMs;
-    if (emergencyCooldown > 0) emergencyCooldown--;
-
-    if (!state.paused && sim && sim.update) {
-      sim.update();
-      // stabilitäts-wächter — nur bei aktivem, laufendem wachstum (inkl. 3d)
-      if (
-        document.body.classList.contains("entered") &&
-        p.frameCount > STABILITY_WARMUP_FRAMES &&
-        hasActiveGrowth()
-      ) {
-        const fps = p.frameRate();
-        const slowFps = fps > 0 && fps < stabilityMinFps();
-        const slowFrame = frameMs > stabilityMaxFrameMs();
-        if (slowFps || slowFrame) {
-          lowFpsFrames++;
-          if (lowFpsFrames >= STABILITY_TRIP_FRAMES) emergencyClear();
-        } else if (lowFpsFrames > 0) {
-          lowFpsFrames -= 2;
-          if (lowFpsFrames < 0) lowFpsFrames = 0;
-        }
-      }
-    }
+    if (!state.paused && sim && sim.update) sim.update();
     if (sim && sim.draw) sim.draw();
-    if (state.mode === "lab2" || state.mode === "diff3d" || state.mode === "dof") {
-      refreshNodeCountLabel();
-    }
-    if (state.input === "border") {
-      maskGrowthToBorder(p);
-      drawBorderOverlay(p);
-      drawBorderDragPreview(p);
-    }
+    if (state.mode === "lab2") refreshLab2MaxNodesLabel();
+    if (state.mode === "diff3d") refreshDiff3MaxNodesLabel();
     // tinte nur sichtbar während des malens — danach nur wachstum
-    if ((state.input === "draw" || isBorderPaintTool()) && isDrawingStroke && drawG) {
+    if (state.input === "draw" && isDrawingStroke && drawG) {
       p.image(drawG, 0, 0);
     }
     for (let i = 0; i < glassSurfaces.length; i++) {
@@ -3095,38 +2508,25 @@ const sketch = (p) => {
     p.resizeCanvas(rect.width, rect.height);
     const oldDraw = drawG;
     const oldSeed = drawSeedG;
-    const oldBorder = borderG;
     drawG = p.createGraphics(p.width, p.height);
     drawG.pixelDensity(1);
     drawG.clear();
     drawSeedG = p.createGraphics(p.width, p.height);
     drawSeedG.pixelDensity(1);
     drawSeedG.clear();
-    borderG = p.createGraphics(p.width, p.height);
-    borderG.pixelDensity(1);
-    borderG.clear();
     if (oldSeed) {
       drawSeedG.image(oldSeed, 0, 0);
       oldSeed.remove();
     }
-    if (oldBorder) {
-      borderG.image(oldBorder, 0, 0);
-      oldBorder.remove();
-    }
     if (oldDraw) oldDraw.remove();
     drawStrokeBefore = null;
-    borderDrag = null;
-    refreshBorderMaskCache();
     rebuildSim();
   };
 
   function paintAt() {
-    if ((state.input !== "draw" && !isBorderPaintTool()) || !drawG) return false;
+    if (state.input !== "draw" || !drawG) return false;
     if (canvasInputBlocked(p)) return false;
     if (p.mouseX < 0 || p.mouseX > p.width || p.mouseY < 0 || p.mouseY > p.height) return false;
-    if (isBorderPaintTool() && borderMaskCache.hasInk && !borderContainsPoint(p.mouseX, p.mouseY)) {
-      return false;
-    }
     drawG.stroke(10);
     const sw = drawPreviewStrokeW();
     drawG.strokeWeight(sw);
@@ -3153,16 +2553,7 @@ const sketch = (p) => {
       }
       return;
     }
-    if (isBorderShapeTool()) {
-      borderDrag = {
-        x0: Math.round(p.mouseX),
-        y0: Math.round(p.mouseY),
-        x1: Math.round(p.mouseX),
-        y1: Math.round(p.mouseY),
-      };
-      return;
-    }
-    if (state.input === "draw" || isBorderPaintTool()) {
+    if (state.input === "draw") {
       isDrawingStroke = true;
       captureDrawStrokeBefore(p);
       drewThisStroke = paintAt();
@@ -3174,25 +2565,11 @@ const sketch = (p) => {
 
   p.mouseDragged = () => {
     if (canvasInputBlocked(p)) return;
-    if (borderDrag && isBorderShapeTool()) {
-      borderDrag.x1 = Math.round(p.mouseX);
-      borderDrag.y1 = Math.round(p.mouseY);
-      return;
-    }
-    if ((state.input === "draw" || isBorderPaintTool()) && paintAt()) drewThisStroke = true;
+    if (state.input === "draw" && paintAt()) drewThisStroke = true;
   };
 
   p.mouseReleased = () => {
-    if (borderDrag && isBorderShapeTool()) {
-      const { x0, y0, x1, y1 } = borderDrag;
-      borderDrag = null;
-      if (Math.hypot(x1 - x0, y1 - y0) >= 4) {
-        applyBorderPathfinder(state.border.shape, x0, y0, x1, y1);
-      }
-      blockCanvasPointer = false;
-      return;
-    }
-    if (state.input === "draw" || isBorderPaintTool()) {
+    if (state.input === "draw") {
       if (drewThisStroke) commitDrawStroke(p);
       drewThisStroke = false;
       isDrawingStroke = false;
@@ -3212,504 +2589,305 @@ function updateInputFontSize() {
   syncMobileSheetHeight();
   const stage = getStageRect();
   const layout = getGrowthLayout(stage.width, stage.height);
-  const val = els.textField.value;
-  const showingHint = !val.length;
-  const measureTxt = showingHint ? SEED_TEXT_HINT : val;
+  const txt = els.textField.value || els.textField.placeholder || " ";
 
   const tmp = document.createElement("canvas");
   const ctx = tmp.getContext("2d");
-  const fam = state.mode === "reactor" ? state.reactorFont : DISPLAY_FONT;
+  const fam = state.mode === "reactor" ? state.reactorFont : "Helvetica Neue";
   const wt = state.mode === "reactor" ? state.reactorFontWeight : "700";
-  const isReactor = state.mode === "reactor";
   const size = ctx
-    ? (showingHint
-      ? measureHintFontSize(ctx, layout.measureW, layout.measureH, fam, wt)
-      : measureSeedFontSize(
-        ctx, val.trim() || "A", layout.measureW, layout.measureH, fam, wt
-      ))
+    ? measureSeedFontSize(
+      ctx, txt.trim() || "A", layout.measureW, layout.measureH, fam, wt
+    )
     : Math.min(layout.measureH * 0.5, layout.measureW * 0.5);
 
-  els.sizer.textContent = measureTxt;
-  applySeedFieldFont(els.sizer, size, fam, wt, isReactor);
-  applySeedFieldFont(els.measureBefore, size, fam, wt, isReactor);
-  applySeedFieldFont(els.textField, size, fam, wt, isReactor);
-  // hint (type here) NICHT mit der seed-schrift überschreiben — styling kommt aus css
-  // (klein, hellgrau, helvetica)
+  els.sizer.textContent = txt;
 
+  els.textField.style.fontSize = `${size}px`;
+  els.sizer.style.fontSize = `${size}px`;
+  if (state.mode === "reactor") {
+    const fam = state.reactorFont.includes(" ") ? `"${state.reactorFont}"` : state.reactorFont;
+    const fontCss = `${state.reactorFontWeight} ${size}px ${fam}, Helvetica, Arial, sans-serif`;
+    els.sizer.style.fontFamily = fontCss;
+    els.textField.style.fontFamily = fontCss;
+    els.textField.style.fontWeight = state.reactorFontWeight;
+  } else {
+    els.sizer.style.fontFamily = "";
+    els.textField.style.fontFamily = "";
+    els.textField.style.fontWeight = "700";
+  }
   const w = els.sizer.offsetWidth;
-  const maxW = layout.measureW * 0.95;
-  const inputW = Math.min(Math.max(w + 8, size * 0.55), maxW);
-  els.textField.style.width = `${inputW}px`;
-  if (els.seedHint) {
-    els.seedHint.hidden = !showingHint;
-    els.seedHint.style.width = `${inputW}px`;
-  }
-
-  updateSeedCaret();
-}
-
-function updateSeedCaret(forceShow = false) {
-  const input = els.textField;
-  const caret = els.seedCaret;
-  clearSeedCaretHideTimer();
-
-  if (!input || !caret || state.input !== "text") {
-    seedCaretIdleHidden = false;
-    if (caret) caret.classList.add("is-off");
-    return;
-  }
-
-  const focused = document.activeElement === input;
-  if (!focused) {
-    seedCaretIdleHidden = false;
-    caret.classList.add("is-off");
-    return;
-  }
-
-  const val = input.value;
-  const isEmpty = !val.length;
-
-  if (isEmpty && seedCaretIdleHidden && !forceShow) {
-    caret.classList.add("is-off");
-    return;
-  }
-
-  if (forceShow || !isEmpty) seedCaretIdleHidden = false;
-  caret.classList.remove("is-off");
-
-  const fontSize = parseFloat(input.style.fontSize) || 88;
-  const lineH = fontSize * 1.2;
-  const caretW = 1;
-  caret.style.width = `${caretW}px`;
-  caret.style.height = `${Math.round(lineH)}px`;
-
-  const measureFull = val.length ? val : SEED_TEXT_HINT;
-  const pos = val.length ? (input.selectionStart ?? val.length) : 0;
-  const before = measureFull.slice(0, pos);
-
-  if (els.measureBefore) els.measureBefore.textContent = before || "\u200b";
-  els.sizer.textContent = measureFull;
-
-  const textW = els.sizer.offsetWidth;
-  const beforeW = els.measureBefore ? els.measureBefore.offsetWidth : 0;
-  const inputW = input.offsetWidth;
-  const caretLeft = (inputW - textW) / 2 + beforeW;
-  caret.style.left = `${caretLeft}px`;
-
-  scheduleSeedCaretHide();
-}
-
-function bindSeedTextField() {
-  const input = ui.textField || els.textField;
-  if (!input) return;
-
-  const sync = () => {
-    state.text = input.value;
-    updateInputFontSize();
-    if (state.input === "text" && !currentIs3d()) rebuildSim();
-  };
-
-  input.addEventListener("input", () => {
-    sync();
-    updateSeedCaret(true);
-  });
-  input.addEventListener("keydown", (e) => {
-    e.stopPropagation();
-    updateSeedCaret(true);
-  });
-  input.addEventListener("keyup", () => updateSeedCaret(true));
-  input.addEventListener("click", () => updateSeedCaret(true));
-  input.addEventListener("focus", () => {
-    updateSeedCaret(true);
-    updateInputFontSize();
-  });
-  input.addEventListener("blur", () => {
-    updateSeedCaret();
-    updateInputFontSize();
-  });
-  document.addEventListener("selectionchange", () => {
-    if (document.activeElement === input) updateSeedCaret();
-  });
+  els.textField.style.width = `${Math.min(w + 6, stage.width * 0.95)}px`;
 }
 
 bindCanvasPointerGuards();
 
-/* ============================================================
-   NEUES UI — topbar-nav, version 1/2, einheitliche parameter
-   ============================================================ */
+els.inputTabs.forEach((btn) => btn.addEventListener("click", () => setInput(btn.dataset.input)));
+els.growthModes.forEach((btn) => btn.addEventListener("click", () => setMode(btn.dataset.mode)));
 
-const ui = {
-  navTabs: Array.from(document.querySelectorAll(".nav-tab")),
-  verBtns: Array.from(document.querySelectorAll(".ver-btn")),
-  verSectionLabel: document.getElementById("ver-section-label"),
-  speed: document.getElementById("param-speed"),
-  speedVal: document.getElementById("val-speed"),
-  nodes: document.getElementById("btn-nodes"),
-  play: document.getElementById("btn-play"),
-  reset: document.getElementById("btn-reset"),
-  clear: document.getElementById("btn-clear"),
-  svg: document.getElementById("btn-svg"),
-  save: document.getElementById("btn-save"),
-  info: document.getElementById("btn-info"),
-  infoClose: document.getElementById("btn-info-close"),
-  infoModal: document.getElementById("info-modal"),
-  textField: document.getElementById("seed-text"),
+if (els.textField) {
+  els.textField.addEventListener("input", () => {
+    state.text = els.textField.value;
+    updateInputFontSize();
+    if (state.input === "text") rebuildSim();
+  });
+  els.textField.addEventListener("keydown", (e) => e.stopPropagation());
+}
+
+els.brush.addEventListener("input", () => {
+  state.brush = parseInt(els.brush.value, 10);
+  els.brushVal.textContent = String(state.brush);
+});
+
+els.clear.addEventListener("click", () => {
+  if (drawG) drawG.clear();
+  if (drawSeedG) drawSeedG.clear();
+  drawStrokeBefore = null;
+  drewThisStroke = false;
+  isDrawingStroke = false;
+  rebuildSim();
+});
+
+els.speed.addEventListener("input", () => {
+  state.speed = parseFloat(els.speed.value);
+  syncSpeedUI();
+  saveSpeedToStorage();
+});
+
+function refreshParamLabels() {
+  if (!MODES[state.mode]) return;
+  els.aVal.textContent = MODES[state.mode].fmtA(state.a);
+  els.bVal.textContent = MODES[state.mode].fmtB(state.b);
+  els.cVal.textContent = MODES[state.mode].fmtC(state.c);
+}
+
+function bindParam(input, valEl, key, fmtKey) {
+  input.addEventListener("input", () => {
+    state[key] = parseFloat(input.value);
+    valEl.textContent = MODES[state.mode][fmtKey](state[key]);
+  });
+}
+
+bindParam(els.a, els.aVal, "a", "fmtA");
+bindParam(els.b, els.bVal, "b", "fmtB");
+bindParam(els.c, els.cVal, "c", "fmtC");
+
+if (els.reactorFont) {
+  els.reactorFont.value = state.reactorFont;
+  els.reactorFont.addEventListener("input", () => {
+    state.reactorFont = els.reactorFont.value.trim() || "Helvetica Neue";
+    updateInputFontSize();
+    if (state.mode === "reactor") rebuildSim();
+  });
+}
+if (els.reactorFontUrl) {
+  els.reactorFontUrl.value = state.reactorFontUrl;
+  els.reactorFontUrl.addEventListener("change", async () => {
+    state.reactorFontUrl = els.reactorFontUrl.value.trim();
+    if (state.mode === "reactor") await rebuildSim();
+  });
+}
+
+/* lab2 — differential growth: komplexität + teilungs-abstand bauen neu auf */
+function bindLab2Param(input, valEl, key, fmt, rebuildOnChange) {
+  if (!input || !valEl) return;
+  input.value = String(state.lab2[key]);
+  valEl.textContent = fmt(state.lab2[key]);
+  input.addEventListener("input", () => {
+    state.lab2[key] = parseFloat(input.value);
+    valEl.textContent = fmt(state.lab2[key]);
+    if (key === "split" || key === "complexity") {
+      if (els.l2SplitVal && key === "complexity") {
+        els.l2SplitVal.textContent = lab2SplitFmt(state.lab2.split);
+      }
+      if (els.l2ComplexityVal && key === "split") {
+        els.l2ComplexityVal.textContent = lab2ComplexityFmt(state.lab2.complexity);
+      }
+    }
+    if (rebuildOnChange && state.mode === "lab2") rebuildSim();
+  });
+}
+
+const pct = (v) => `${Math.round(v * 100)}%`;
+const lab2ComplexityFmt = (v) => `~${Math.round(10 + v * 90)}`;
+const lab2SplitFmt = (v) => {
+  const stage = getStageRect();
+  const prm = typeof lab2ComputeParams === "function"
+    ? lab2ComputeParams({ ...state.lab2, split: v }, stage.width || 800, stage.height || 600)
+    : { insertDistance: 5 };
+  return `${Math.round(prm.insertDistance)} px`;
 };
 
-function migrateForceFields(st) {
-  if (st.forceType != null) {
-    const strength = st.force ?? 0.5;
-    st.force = st.forceType === "repulsion"
-      ? 0.5 + strength * 0.5
-      : 0.5 - strength * 0.5;
-    delete st.forceType;
-  }
-  if (st.force == null) st.force = 0.5;
-}
+bindLab2Param(els.l2Stroke, els.l2StrokeVal, "stroke", lab2StrokeFmt, false);
+bindLab2Param(els.l2Attraction, els.l2AttractionVal, "attraction", pct, false);
+bindLab2Param(els.l2Repulsion, els.l2RepulsionVal, "repulsion", pct, false);
+bindLab2Param(els.l2Push, els.l2PushVal, "push", pct, false);
+bindLab2Param(els.l2Complexity, els.l2ComplexityVal, "complexity", lab2ComplexityFmt, true);
+bindLab2Param(els.l2Split, els.l2SplitVal, "split", lab2SplitFmt, true);
+bindLab2Param(els.l2NodeLimit, els.l2NodeLimitVal, "nodeLimit", lab2NodeLimitFmt, false);
+els.l2NodeLimit?.addEventListener("input", () => refreshLab2MaxNodesLabel());
+refreshLab2MaxNodesLabel();
 
-function applyForceParams(st) {
-  const f = st.force ?? 0.5;
-  st.attraction = 1 - f;
-  st.repulsion = f;
-}
-
-function forceStrength(st) {
-  const f = st.force ?? 0.5;
-  return f <= 0.5 ? 1 - f : f;
-}
-
-function forceSide(st) {
-  const f = st.force ?? 0.5;
-  if (Math.abs(f - 0.5) < 0.02) return "neutral";
-  return f > 0.5 ? "repulsion" : "attraction";
-}
-
-function formatForceDisplay(st) {
-  const side = forceSide(st);
-  const pct = forceStrength(st);
-  if (side === "neutral") return "50%";
-  const label = side === "repulsion" ? "abstoßung" : "anziehung";
-  return `${fmtPct(pct)} ${label}`;
-}
-
-function syncForceEndLabels(side) {
-  const left = document.querySelector(".force-end--left");
-  const right = document.querySelector(".force-end--right");
-  const control = document.querySelector(".force-control");
-  if (control) control.dataset.side = side;
-  if (left) left.classList.toggle("is-active", side === "attraction");
-  if (right) right.classList.toggle("is-active", side === "repulsion");
-}
-
-function initForceFields(st) {
-  migrateForceFields(st);
-  applyForceParams(st);
-}
-
-/* parameter-regler (ein satz, adaptiv pro modus) */
-const PARAMS = {
-  stroke: { id: "param-stroke", val: "val-stroke" },
-  force: { id: "param-force", val: "val-force" },
-  complexity: { id: "param-complexity", val: "val-complexity" },
-  split: { id: "param-split", val: "val-split" },
-  nodeLimit: { id: "param-node-limit", val: "val-node-limit" },
-  link: { id: "param-link", val: "val-link" },
-  tumble: { id: "param-tumble", val: "val-tumble" },
+const diff3ComplexityFmt = (v) => `~${Math.round(10 + v * 90)}`;
+const diff3SplitFmt = (v) => {
+  const stage = getStageRect();
+  const prm = typeof diff3ComputeParams === "function"
+    ? diff3ComputeParams({ ...state.diff3d, split: v }, stage.width || 800, stage.height || 600)
+    : { insertDistance: 5 };
+  return `${Math.round(prm.insertDistance)} px`;
 };
-Object.keys(PARAMS).forEach((k) => {
-  PARAMS[k].input = document.getElementById(PARAMS[k].id);
-  PARAMS[k].out = document.getElementById(PARAMS[k].val);
-});
 
-const fmtPct = (v) => `${Math.round(v * 100)}%`;
-const fmtComplexity = (v) => `~${Math.round(10 + v * 90)}`;
-
-function stageWH() {
-  const s = getStageRect();
-  return { w: s.width || 800, h: s.height || 600 };
-}
-
-function fmtSplitFor(mode, v) {
-  const { w, h } = stageWH();
-  try {
-    if (mode === "diff3d" && typeof diff3ComputeParams === "function") {
-      return `${Math.round(diff3ComputeParams({ ...state.diff3d, split: v }, w, h).insertDistance)} px`;
+function bindDiff3Param(input, valEl, key, fmt, rebuildOnChange) {
+  if (!input || !valEl) return;
+  input.value = String(state.diff3d[key]);
+  valEl.textContent = fmt(state.diff3d[key]);
+  input.addEventListener("input", () => {
+    state.diff3d[key] = parseFloat(input.value);
+    valEl.textContent = fmt(state.diff3d[key]);
+    if (key === "split" || key === "complexity") {
+      if (els.d3SplitVal && key === "complexity") {
+        els.d3SplitVal.textContent = diff3SplitFmt(state.diff3d.split);
+      }
+      if (els.d3ComplexityVal && key === "split") {
+        els.d3ComplexityVal.textContent = diff3ComplexityFmt(state.diff3d.complexity);
+      }
     }
-    if (mode === "dof" && typeof dofComputeParams === "function") {
-      return `${Math.round(dofComputeParams({ ...state.dof, split: v }, w, h).insertDistance)} px`;
-    }
-    if (typeof lab2ComputeParams === "function") {
-      return `${Math.round(lab2ComputeParams({ ...state.lab2, split: v }, w, h).insertDistance)} px`;
-    }
-  } catch (err) {
-    /* ignore */
-  }
-  return `${Math.round(v * 100)}%`;
-}
-
-function currentIs3d() {
-  return state.mode === "diff3d" || state.mode === "dof";
-}
-
-function activeParamState() {
-  if (state.mode === "diff3d") return state.diff3d;
-  if (state.mode === "dof") return state.dof;
-  return state.lab2;
-}
-
-/* welche regler sind im modus aktiv + formatierung + ob neu aufbauen */
-function paramConfig(mode) {
-  const common = {
-    force: { fmt: fmtPct, rebuild: false },
-    complexity: { fmt: fmtComplexity, rebuild: mode === "lab2" },
-    split: { fmt: (v) => fmtSplitFor(mode, v), rebuild: mode === "lab2" },
-    nodeLimit: { fmt: (v) => (typeof lab2NodeLimitFmt === "function" ? lab2NodeLimitFmt(v) : String(Math.round(2000 + v * 10000))), rebuild: false },
-  };
-  if (mode === "diff3d" || mode === "dof") {
-    return {
-      ...common,
-      stroke: { fmt: lab2StrokeFmt, rebuild: false },
-      link: { fmt: mode === "dof" ? dofLinkFmt : diff3LinkFmt, rebuild: false },
-      tumble: { fmt: mode === "dof" ? dofTumbleFmt : diff3TumbleFmt, rebuild: false },
-    };
-  }
-  return { ...common, stroke: { fmt: lab2StrokeFmt, rebuild: false } };
-}
-
-Object.keys(PARAMS).forEach((key) => {
-  const def = PARAMS[key];
-  if (!def.input) return;
-  def.input.addEventListener("input", () => {
-    const st = activeParamState();
-    if (key === "force") {
-      st.force = parseFloat(def.input.value);
-      applyForceParams(st);
-      if (def.out) def.out.textContent = formatForceDisplay(st);
-      syncForceEndLabels(forceSide(st));
-      return;
-    } else if (!(key in st)) {
-      return;
-    } else {
-      st[key] = parseFloat(def.input.value);
-    }
-    const v = key === "force" ? st.force : st[key];
-    const cfg = paramConfig(state.mode)[key];
-    if (def.out && cfg) def.out.textContent = cfg.fmt(v);
-    if (key === "nodeLimit") refreshNodeCountLabel();
-    if (cfg && cfg.rebuild) rebuildSim();
-  });
-});
-
-function syncForceUI() {
-  const st = activeParamState();
-  initForceFields(st);
-  const def = PARAMS.force;
-  if (def.input) def.input.value = String(st.force);
-  if (def.out) def.out.textContent = formatForceDisplay(st);
-  syncForceEndLabels(forceSide(st));
-}
-
-const FLAT_VERSION_LABELS = { 1: "rund", 2: "eckig" };
-const THREE_VERSION_LABELS = { 1: "globe", 2: "mesh" };
-
-function syncVersionUI() {
-  const is3d = currentIs3d();
-  if (ui.verSectionLabel) {
-    ui.verSectionLabel.textContent = "differential growth";
-  }
-  let activeVer;
-  if (is3d) activeVer = state.mode === "dof" ? 1 : 2;
-  else activeVer = state.lab2.legacy ? 1 : 2;
-  ui.verBtns.forEach((b) => {
-    const ver = Number(b.dataset.ver);
-    const labels = is3d ? THREE_VERSION_LABELS : FLAT_VERSION_LABELS;
-    const label = labels[ver] || `version ${ver}`;
-    b.textContent = label;
-    b.setAttribute("aria-label", label);
-    b.classList.toggle("is-active", ver === activeVer);
-  });
-  ui.navTabs.forEach((b) => {
-    const nav = b.dataset.nav;
-    let active = false;
-    if (nav === "3d") active = is3d;
-    else if (!is3d) active = state.input === nav;
-    b.classList.toggle("is-active", active);
+    if (rebuildOnChange && state.mode === "diff3d") rebuildSim();
   });
 }
 
-function syncNodesLabel() {
-  const st = activeParamState();
-  if (ui.nodes) ui.nodes.textContent = `nodes: ${st.showNodes ? "an" : "aus"}`;
-}
+bindDiff3Param(els.d3Attraction, els.d3AttractionVal, "attraction", pct, false);
+bindDiff3Param(els.d3Repulsion, els.d3RepulsionVal, "repulsion", pct, false);
+bindDiff3Param(els.d3Depth, els.d3DepthVal, "depth", diff3DepthFmt, false);
+bindDiff3Param(els.d3Link, els.d3LinkVal, "link", diff3LinkFmt, false);
+bindDiff3Param(els.d3Complexity, els.d3ComplexityVal, "complexity", diff3ComplexityFmt, false);
+bindDiff3Param(els.d3Split, els.d3SplitVal, "split", diff3SplitFmt, false);
+bindDiff3Param(els.d3DofFocus, els.d3DofFocusVal, "dofFocus", diff3DofFocusFmt, false);
+bindDiff3Param(els.d3DofBlur, els.d3DofBlurVal, "dofBlur", diff3DofBlurFmt, false);
+bindDiff3Param(els.d3Exposure, els.d3ExposureVal, "exposure", diff3ExposureFmt, false);
+bindDiff3Param(els.d3Tumble, els.d3TumbleVal, "tumble", diff3TumbleFmt, false);
+bindDiff3Param(els.d3NodeLimit, els.d3NodeLimitVal, "nodeLimit", lab2NodeLimitFmt, false);
 
-function syncPanelForMode() {
-  const cfg = paramConfig(state.mode);
-  const st = activeParamState();
-  initForceFields(st);
-  Object.keys(PARAMS).forEach((key) => {
-    const def = PARAMS[key];
-    if (!def.input) return;
-    if (key === "force") {
-      if (cfg.force) syncForceUI();
-      return;
-    }
-    if (cfg[key] && key in st) {
-      def.input.value = String(st[key]);
-      if (def.out) def.out.textContent = cfg[key].fmt(st[key]);
-    }
-  });
-  syncVersionUI();
-  syncNodesLabel();
-  refreshNodeCountLabel();
-}
+const dofSplitFmt = (v) => {
+  const stage = getStageRect();
+  const prm = typeof dofComputeParams === "function"
+    ? dofComputeParams({ ...state.dof, split: v }, stage.width || 800, stage.height || 600)
+    : { insertDistance: 5 };
+  return `${Math.round(prm.insertDistance)} px`;
+};
 
-/* ---- topbar-nav: text / draw / border / 3D ---- */
-ui.navTabs.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const nav = btn.dataset.nav;
-    if (nav === "3d") {
-      setMode(state.threeVersion === 1 ? "dof" : "diff3d");
-    } else {
-      if (currentIs3d()) setMode("lab2");
-      state.lab2.legacy = state.flatVersion === 1;
-      setInput(nav);
-      syncVersionUI();
-    }
-  });
-});
-
-/* ---- border: form / malen / pathfinder ---- */
-document.querySelectorAll(".border-shape-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    state.border.shape = btn.dataset.borderShape === "circle" ? "circle" : "rect";
-    state.border.tool = "shape";
-    syncBorderToolUI();
-  });
-});
-document.querySelectorAll(".border-tool-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    if (btn.dataset.borderTool === "paint") {
-      state.border.tool = "paint";
-      syncBorderToolUI();
-    }
-  });
-});
-document.querySelectorAll(".border-pf-btn").forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const pf = btn.dataset.borderPf;
-    if (!BORDER_PF_OPS[pf]) return;
-    state.border.pathfinder = pf;
-    state.border.tool = "shape";
-    syncBorderToolUI();
-  });
-});
-
-/* ---- version 1 / 2 ---- */
-ui.verBtns.forEach((btn) => {
-  btn.addEventListener("click", () => {
-    const ver = Number(btn.dataset.ver);
-    if (currentIs3d()) {
-      state.threeVersion = ver;
-      setMode(ver === 1 ? "dof" : "diff3d");
-    } else {
-      state.flatVersion = ver;
-      state.lab2.legacy = ver === 1;
-      syncVersionUI();
-      rebuildSim();
-    }
-  });
-});
-
-/* ---- tempo ---- */
-if (ui.speed) {
-  ui.speed.addEventListener("input", () => {
-    state.speed = parseFloat(ui.speed.value);
-    syncSpeedUI();
+function bindDofParam(input, valEl, key, fmt) {
+  if (!input || !valEl) return;
+  input.value = String(state.dof[key]);
+  valEl.textContent = fmt(state.dof[key]);
+  input.addEventListener("input", () => {
+    state.dof[key] = parseFloat(input.value);
+    valEl.textContent = fmt(state.dof[key]);
+    if (key === "nodeLimit") refreshDofMaxNodesLabel();
   });
 }
 
-/* ---- nodes an/aus ---- */
-if (ui.nodes) {
-  ui.nodes.addEventListener("click", () => {
-    const st = activeParamState();
-    st.showNodes = !st.showNodes;
-    syncNodesLabel();
+bindDofParam(els.dofLink, els.dofLinkVal, "link", dofLinkFmt);
+bindDofParam(els.dofAttraction, els.dofAttractionVal, "attraction", pct);
+bindDofParam(els.dofRepulsion, els.dofRepulsionVal, "repulsion", pct);
+bindDofParam(els.dofSplit, els.dofSplitVal, "split", dofSplitFmt);
+bindDofParam(els.dofTumble, els.dofTumbleVal, "tumble", dofTumbleFmt);
+bindDofParam(els.dofNodeLimit, els.dofNodeLimitVal, "nodeLimit", lab2NodeLimitFmt);
+
+function refreshDofNodesLabel() {
+  if (els.dofNodes) els.dofNodes.textContent = `nodes: ${state.dof.showNodes ? "an" : "aus"}`;
+}
+if (els.dofNodes) {
+  els.dofNodes.addEventListener("click", () => {
+    state.dof.showNodes = !state.dof.showNodes;
+    refreshDofNodesLabel();
+  });
+  refreshDofNodesLabel();
+}
+
+function bindLabSplit() {
+  if (!els.labSplit || !els.labSplitVal) return;
+  const fmt = typeof labSplitFmt === "function" ? labSplitFmt : (v) => `${Math.round(v * 100)}%`;
+  els.labSplit.value = String(state.lab.split);
+  els.labSplitVal.textContent = fmt(state.lab.split);
+  els.labSplit.addEventListener("input", () => {
+    state.lab.split = parseFloat(els.labSplit.value);
+    els.labSplitVal.textContent = fmt(state.lab.split);
   });
 }
+bindLabSplit();
 
-/* ---- pause ---- */
-if (ui.play) ui.play.addEventListener("click", () => setPaused(!state.paused));
-
-/* ---- neu wachsen ---- */
-if (ui.reset) {
-  ui.reset.addEventListener("click", () => {
-    if (state.mode === "diff3d") {
-      state.diff3d.graph = null;
-      if (sim && sim.clearGraph) sim.clearGraph();
-      else rebuildSim();
-      return;
-    }
-    if (state.mode === "dof") {
-      state.dof.graph = null;
-      if (sim && sim.clearGraph) sim.clearGraph();
-      else rebuildSim();
-      return;
-    }
-    rebuildSim();
+function refreshLab2NodesLabel() {
+  if (els.l2Nodes) els.l2Nodes.textContent = `nodes: ${state.lab2.showNodes ? "an" : "aus"}`;
+}
+if (els.l2Nodes) {
+  els.l2Nodes.addEventListener("click", () => {
+    state.lab2.showNodes = !state.lab2.showNodes;
+    refreshLab2NodesLabel();
   });
+  refreshLab2NodesLabel();
 }
 
-/* ---- leeren ---- */
-if (ui.clear) {
-  ui.clear.addEventListener("click", () => {
-    clearCanvas();
+function refreshDiff3NodesLabel() {
+  if (els.d3Nodes) els.d3Nodes.textContent = `nodes: ${state.diff3d.showNodes ? "an" : "aus"}`;
+}
+if (els.d3Nodes) {
+  els.d3Nodes.addEventListener("click", () => {
+    state.diff3d.showNodes = !state.diff3d.showNodes;
+    refreshDiff3NodesLabel();
   });
+  refreshDiff3NodesLabel();
 }
 
-/* ---- export ---- */
-const MODE_FILE_NAMES = { lab2: "differential-growth", diff3d: "mesh", dof: "globe" };
-if (ui.save) {
-  ui.save.addEventListener("click", () => {
-    const name =
-      state.mode === "lab2"
-        ? state.lab2.legacy
-          ? "rund"
-          : "eckig"
-        : state.input === "border"
-          ? "border"
-          : MODE_FILE_NAMES[state.mode] || state.mode;
-    if (state.input === "border") {
-      savePngWithoutBorderChrome(`weirdgrowth-${name}-${Date.now()}`);
-    } else if (p5i) {
-      p5i.saveCanvas(`weirdgrowth-${name}-${Date.now()}`, "png");
-    }
-  });
-}
-if (ui.svg) ui.svg.addEventListener("click", exportSVG);
-
-/* ---- texteingabe ---- */
-bindSeedTextField();
-
-/* ---- info-fenster ---- */
-function openInfo() {
-  if (ui.infoModal) ui.infoModal.hidden = false;
-}
-function closeInfo() {
-  if (ui.infoModal) ui.infoModal.hidden = true;
-}
-if (ui.info) ui.info.addEventListener("click", openInfo);
-if (ui.infoClose) ui.infoClose.addEventListener("click", closeInfo);
-if (ui.infoModal) {
-  ui.infoModal.addEventListener("click", (e) => {
-    if (e.target === ui.infoModal) closeInfo();
-  });
+function refreshLab2LegacyLabel() {
+  if (!els.l2Legacy) return;
+  els.l2Legacy.classList.toggle("is-active", state.lab2.legacy);
+  els.l2Legacy.textContent = state.lab2.legacy
+    ? "klassik aktiv"
+    : "klassik (explosion)";
 }
 
-window.addEventListener("keydown", (e) => {
-  if (e.key === "Escape") {
-    closeInfo();
+els.play.addEventListener("click", () => setPaused(!state.paused));
+els.reset.addEventListener("click", () => {
+  if (state.mode === "diff3d") {
+    state.diff3d.graph = null;
+    if (sim && sim.clearGraph) sim.clearGraph();
+    else rebuildSim();
+    refreshDiff3MaxNodesLabel();
     return;
   }
+  if (state.mode === "dof") {
+    state.dof.graph = null;
+    if (sim && sim.clearGraph) sim.clearGraph();
+    else rebuildSim();
+    refreshDofMaxNodesLabel();
+    return;
+  }
+  rebuildSim();
+});
+if (els.l2Legacy) {
+  els.l2Legacy.addEventListener("click", () => {
+    state.lab2.legacy = !state.lab2.legacy;
+    refreshLab2LegacyLabel();
+    rebuildSim();
+  });
+  refreshLab2LegacyLabel();
+}
+const MODE_FILE_NAMES = {
+  lab2: "differential-growth",
+  diff3d: "3d-growth",
+  dof: "3d-web",
+  lab: "lab",
+  reactor: "reactor",
+};
+
+els.save.addEventListener("click", () => {
+  const name = MODE_FILE_NAMES[state.mode] || state.mode;
+  if (p5i) p5i.saveCanvas(`weirdgrowth-${name}-${Date.now()}`, "png");
+});
+els.svg.addEventListener("click", exportSVG);
+
+window.addEventListener("keydown", (e) => {
   if (e.target.matches("input, button, textarea, select")) return;
   if (e.key === " ") {
     e.preventDefault();
@@ -3735,83 +2913,16 @@ if (sidePanelEl && typeof ResizeObserver !== "undefined") {
 window.addEventListener("resize", onMobileSheetLayoutChange);
 onMobileSheetLayoutChange();
 
-/* ---- intro: differential growth, dann intro fährt nach oben weg ---- */
-function runIntro() {
-  const intro = document.getElementById("intro");
-  if (!intro) {
-    document.body.classList.add("entered");
-    return;
-  }
-
-  const reduce = window.matchMedia("(prefers-reduced-motion: reduce)").matches;
-  let transitioning = false;
-  let done = false;
-  const wasPaused = state.paused;
-  state.paused = true;
-
-  const completeIntro = () => {
-    if (done) return;
-    done = true;
-    if (typeof IntroGrowth !== "undefined") IntroGrowth.teardown();
-    intro.hidden = true;
-    if (ui.textField && state.input === "text") {
-      ui.textField.focus();
-      updateSeedCaret();
-    }
-  };
-
-  // intro fährt nach oben weg; app liegt bereits darunter
-  const startTransition = () => {
-    if (transitioning) return;
-    transitioning = true;
-    document.body.classList.add("entered");
-    state.paused = wasPaused;
-    setPaused(wasPaused);
-    intro.classList.add("leaving");
-    window.setTimeout(completeIntro, reduce ? 0 : 680);
-  };
-
-  intro.addEventListener("click", () => {
-    if (typeof IntroGrowth !== "undefined") IntroGrowth.skip();
-    else startTransition();
-  });
-
-  if (reduce || typeof IntroGrowth === "undefined") {
-    window.setTimeout(startTransition, 280);
-    return;
-  }
-
-  IntroGrowth.start(startTransition);
-
-  window.setTimeout(() => {
-    if (!transitioning) startTransition();
-  }, 5200);
-}
-
 /* init */
-async function loadDisplayFonts() {
-  try {
-    const regular = new FontFace(DISPLAY_FONT, "url(fonts/Astloch-Regular.ttf)");
-    const bold = new FontFace(DISPLAY_FONT, "url(fonts/Astloch-Bold.ttf)", { weight: "700" });
-    await Promise.all([regular.load(), bold.load()]);
-    document.fonts.add(regular);
-    document.fonts.add(bold);
-  } catch (err) {
-    /* ignore */
-  }
+loadSpeedFromStorage();
+syncSpeedUI();
+els.aVal.textContent = MODES[state.mode].fmtA(state.a);
+els.bVal.textContent = MODES[state.mode].fmtB(state.b);
+els.cVal.textContent = MODES[state.mode].fmtC(state.c);
+els.brushVal.textContent = String(state.brush);
+updateInputFontSize();
+if (els.textField) {
+  els.textField.focus();
+  els.textField.select();
 }
-
-loadDisplayFonts().then(() => {
-  try {
-    localStorage.removeItem("weirdgrowth-speed");
-  } catch (err) {
-    /* ignore */
-  }
-  syncSpeedUI();
-  syncPanelForMode();
-  setMode(state.mode);
-  setInput(state.input);
-  updateInputFontSize();
-  runIntro();
-  new p5(sketch);
-});
+new p5(sketch);

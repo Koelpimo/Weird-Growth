@@ -189,6 +189,10 @@ body.is-draw.ctx-flat .stage canvas {
   cursor: crosshair;
 }
 
+body.is-border.ctx-flat .stage canvas {
+  cursor: crosshair;
+}
+
 body.ctx-3d .stage canvas {
   cursor: crosshair;
 }
@@ -353,11 +357,15 @@ body:not(.entered) .text-layer {
 
 .panel-content {
   height: 100%;
+  min-height: 0;
   display: flex;
   flex-direction: column;
   gap: 0;
   padding: 0.7rem 0.65rem 0.8rem;
-  overflow: hidden;
+  overflow-x: hidden;
+  overflow-y: auto;
+  -webkit-overflow-scrolling: touch;
+  overscroll-behavior: contain;
 }
 
 .panel-block {
@@ -537,6 +545,57 @@ input[type="range"]::-moz-range-thumb {
 /* stroke nur flach verstecken: nicht mehr — auch in 3d sichtbar */
 body.ctx-3d .ctl-flat {
   display: none;
+}
+
+.ctl-border {
+  display: none;
+}
+
+body.is-border.ctx-flat .ctl-border {
+  display: block;
+}
+
+.border-pf-label {
+  margin: 0.45rem 0 0.28rem;
+  font-family: var(--font-ui);
+  font-size: 0.68rem;
+  font-weight: var(--ui-weight-strong);
+  letter-spacing: var(--ui-tracking);
+  text-transform: lowercase;
+  color: var(--muted);
+}
+
+.border-pf-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.border-tool-grid {
+  grid-template-columns: 1fr 1fr;
+}
+
+.border-icon-btn {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  min-height: 2.35rem;
+  padding: 0.4rem 0.35rem;
+}
+
+.border-tool-icon {
+  width: 1.15rem;
+  height: 1.15rem;
+  display: block;
+  pointer-events: none;
+}
+
+.panel-btn.is-active .border-tool-icon {
+  color: inherit;
+}
+
+body.is-border[data-border-tool="paint"] .border-pf-grid,
+body.is-border[data-border-tool="paint"] .border-pf-label {
+  opacity: 0.38;
+  pointer-events: none;
 }
 
 .ctl-link,
@@ -1002,8 +1061,8 @@ body.entered .stage {
   }
 
   .nav-tab {
-    padding: 0.23rem 0.4rem;
-    font-size: 0.69rem;
+    padding: 0.23rem 0.32rem;
+    font-size: 0.66rem;
   }
 }
 
